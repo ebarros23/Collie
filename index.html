@@ -392,12 +392,13 @@ const APP = {
   contractData:    [],          // all bars for current contract
   contractName:    '',
   allTriggers:     [],          // triggers for current contract
+  allTrades:       [],          // pre-simulated trades for ALL triggers in this contract
   currentBarIdx:   0,
-  completedTrades: [],          // { entryBar, entryPrice, entryDir, exitBar, exitPrice, pnl, reason }
-  activeTrade:     null,        // { entryBar, entryPrice, entryDir, barsHeld, forcedExit }
+  completedTrades: [],          // trades whose exitBar <= currentBarIdx
+  activeTrade:     null,        // trade whose entryBar <= currentBarIdx < exitBar
   playTimer:       null,
   isPlaying:       false,
-  playAllIdx:      0,           // which trigger we're currently playing in play-all mode
+  playAllIdx:      0,
   playAllMode:     false,
 };
 
@@ -476,6 +477,14 @@ async function loadContract() {
 
     // Find triggers for this contract
     APP.allTriggers = APP.metadata.tradeIndex.filter(t => t.contract === name);
+
+    // Pre-simulate ALL trades for this contract
+    APP.allTrades = [];
+    for (const trig of APP.allTriggers) {
+      const trade = simulateTrade(trig.localIdx);
+      if (trade) APP.allTrades.push(trade);
+    }
+    console.log(`Pre-simulated ${APP.allTrades.length} trades for ${name}`);
 
     // Render trigger list
     const listEl = document.getElementById('triggers-list');
@@ -626,8 +635,8 @@ function buildFigure(barIdx) {
   const exitX=[], exitY=[], exitText=[];
   const holdX=[], holdY=[], holdText=[];
 
-  const allTrades = [...APP.completedTrades];
-  if (APP.activeTrade) allTrades.push(APP.activeTrade);
+  // Use ALL pre-simulated trades — show markers for any trade that overlaps the visible window
+  const allTrades = APP.allTrades.filter(t => t.exitBar >= startIdx && t.entryBar <= endIdx);
 
   for (const trade of allTrades) {
     // Entry marker — show if within visible window
@@ -746,21 +755,11 @@ function renderBar(barIdx) {
   document.getElementById('bar-slider').value = barIdx;
   document.getElementById('bar-label').textContent = barIdx;
 
-  // Check if this bar is a trigger — start a trade simulation
+  // Derive completedTrades and activeTrade from pre-simulated allTrades
   const row = df[barIdx];
-  if (row && row.confirmed_entry && !APP.activeTrade) {
-    const trade = simulateTrade(barIdx);
-    if (trade) {
-      APP.activeTrade = { ...trade, barsHeld: 0 };
-    }
-  }
-
-  // Check if active trade should close
-  if (APP.activeTrade && barIdx >= APP.activeTrade.exitBar) {
-    APP.completedTrades.push({ ...APP.activeTrade });
-    APP.activeTrade = null;
-    updateLedger();
-  }
+  APP.completedTrades = APP.allTrades.filter(t => t.exitBar <= barIdx);
+  APP.activeTrade     = APP.allTrades.find(t => t.entryBar <= barIdx && t.exitBar > barIdx) || null;
+  updateLedger();
 
   // Build and render chart
   const fig = buildFigure(barIdx);
