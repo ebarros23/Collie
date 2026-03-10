@@ -732,11 +732,19 @@ function windowBounds(nRows, currentBarIdx, lookback, lookahead) {
 
 // ── Build Plotly figure ──────────────────────────────────────────────────────
 function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
+  if (!contractDf || contractDf.length === 0 || currentBarIdx >= contractDf.length) {
+    return { traces: [], layout: {} }; // Return empty chart if data is invalid
+  }
+  
   const FIXED_CANDLES = 60; // Fixed number of candles visible at once
   const startIdx = Math.max(0, currentBarIdx - FIXED_CANDLES + 1);
   const endIdx = currentBarIdx;
   
   const visibleDf = contractDf.slice(startIdx, endIdx + 1);
+  if (visibleDf.length === 0) {
+    return { traces: [], layout: {} }; // Return empty chart if no visible data
+  }
+  
   const traces = [];
 
   // Candlestick - only show visible bars
@@ -808,16 +816,18 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
 
   // Current position marker
   const currentRow = contractDf[currentBarIdx];
-  traces.push({
-    type: 'scatter', mode: 'markers',
-    x: [currentRow.time], y: [currentRow.close],
-    name: 'Current',
-    marker: { symbol: 'circle', size: 14, color: '#58a6ff', line: { color: '#fff', width: 2 } },
-  });
+  if (currentRow && currentRow.time && isFiniteNum(currentRow.close)) {
+    traces.push({
+      type: 'scatter', mode: 'markers',
+      x: [currentRow.time], y: [currentRow.close],
+      name: 'Current',
+      marker: { symbol: 'circle', size: 14, color: '#58a6ff', line: { color: '#fff', width: 2 } },
+    });
+  }
 
   // Fixed x-axis range showing exactly FIXED_CANDLES candles
-  const xMin = visibleDf[0].time;
-  const xMax = visibleDf[visibleDf.length - 1].time;
+  const xMin = visibleDf[0]?.time || new Date().toISOString();
+  const xMax = visibleDf[visibleDf.length - 1]?.time || new Date().toISOString();
   const xRange = [xMin, xMax];
 
   const layout = {
@@ -846,38 +856,41 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
   return { traces, layout };
 }
 
-// ── Render current bar ───────────────────────────────────────────────────────
+// ── Render current bar ───────────────────────────────────────────────
 function renderBar(barIdx) {
-  if (!APP.currentContractData) return;
+  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
   
   barIdx = clamp(barIdx, 0, APP.currentContractData.length - 1);
   APP.currentBarIdx = barIdx;
   
   const slider = document.getElementById('bar-slider');
-  slider.max = APP.currentContractData.length - 1;
+  slider.max = Math.max(0, APP.currentContractData.length - 1);
   slider.value = barIdx;
   document.getElementById('bar-label').textContent = barIdx;
   const pct = APP.currentContractData.length > 1 ? (barIdx / (APP.currentContractData.length - 1) * 100) : 0;
   document.getElementById('bar-progress').style.width = pct + '%';
-  document.getElementById('bar-counter').textContent = `${barIdx} / ${APP.currentContractData.length - 1}`;
+  document.getElementById('bar-counter').textContent = `${barIdx} / ${Math.max(0, APP.currentContractData.length - 1)}`;
 
   const { traces, layout } = buildFigure(APP.currentContractData, barIdx, APP.completedTrades);
-  Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
+  if (traces.length > 0) {
+    Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
+  }
 
   const row = APP.currentContractData[barIdx];
+  if (!row) return; // Safety check
   document.getElementById('chart-badge').textContent = APP.currentContractName;
 
   // Market info
   document.getElementById('market-info-body').innerHTML =
-    kvRow('Current price', fmt(row.close, 5))
-    + kvRow('Bar time', row.time)
-    + kvRow('Open', fmt(row.open, 5))
-    + kvRow('High', fmt(row.high, 5))
-    + kvRow('Low', fmt(row.low, 5))
-    + kvRow('ATR', fmt(row.atr, 5));
+    kvRow('Current price', fmt(row?.close, 5))
+    + kvRow('Bar time', row?.time || '—')
+    + kvRow('Open', fmt(row?.open, 5))
+    + kvRow('High', fmt(row?.high, 5))
+    + kvRow('Low', fmt(row?.low, 5))
+    + kvRow('ATR', fmt(row?.atr, 5));
 
   // Active trade info
-  if (APP.activeTrade) {
+  if (APP.activeTrade && row) {
     const trade = APP.activeTrade;
     if (barIdx >= trade.entryBar && barIdx < trade.exitBar) {
       const unrealPnl = (row.close - trade.entryPrice) * trade.entryDirection / CENT;
@@ -911,7 +924,7 @@ function renderBar(barIdx) {
 
   // Update status
   document.getElementById('status-text').textContent =
-    `${APP.currentContractName} · Bar ${barIdx} / ${APP.currentContractData.length - 1}. ${APP.completedTrades.length} trades completed.`;
+    `${APP.currentContractName} · Bar ${barIdx} / ${Math.max(0, APP.currentContractData.length - 1)}. ${APP.completedTrades.length} trades completed.`;
 }
 
 function kvRow(key, val, raw=false) {
@@ -930,6 +943,10 @@ async function loadContract() {
   const contract = document.getElementById('contract-select').value;
   try {
     APP.currentContractData = await loadContractData(contract);
+    if (!APP.currentContractData || APP.currentContractData.length === 0) {
+      document.getElementById('status-text').textContent = 'Error: Contract data is empty';
+      return;
+    }
     APP.currentContractName = contract;
     APP.currentBarIdx = 0;
     APP.completedTrades = [];
@@ -971,7 +988,7 @@ function stopPlayback() {
 }
 
 function startPlay() {
-  if (!APP.currentContractData) return;
+  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
   stopPlayback();
   APP.isPlaying = true;
   document.getElementById('stop-btn').disabled = false;
@@ -1009,16 +1026,15 @@ function startPlay() {
   
   tick();
 }
-
 function startPlayAll() {
-  if (!APP.currentContractData) return;
+  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
   APP.completedTrades = [];
   APP.activeTrade = null;
   APP.currentBarIdx = 0;
   startPlay();
 }
 
-// ── Update ledger ────────────────────────────────────────────────────────────
+// ── Update ledger ────────────────────────────────────────────────────────
 function updateLedger() {
   const tbody = document.querySelector('#ledger-table tbody');
   tbody.innerHTML = APP.completedTrades.map((trade, ix) => {
