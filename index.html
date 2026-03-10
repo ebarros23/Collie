@@ -732,15 +732,14 @@ function windowBounds(nRows, currentBarIdx, lookback, lookahead) {
 
 // ── Build Plotly figure ──────────────────────────────────────────────────────
 function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
-  const lookback  = parseInt(document.getElementById('lookback-slider').value);
-  const lookahead = parseInt(document.getElementById('lookahead-slider').value);
-  const { start: startIdx, end: endIdx } = windowBounds(contractDf.length, currentBarIdx, lookback, lookahead);
+  const FIXED_CANDLES = 60; // Fixed number of candles visible at once
+  const startIdx = Math.max(0, currentBarIdx - FIXED_CANDLES + 1);
+  const endIdx = currentBarIdx;
   
-  const windowDf  = contractDf.slice(startIdx, endIdx + 1);
-  const visibleDf = contractDf.slice(startIdx, currentBarIdx + 1);
+  const visibleDf = contractDf.slice(startIdx, endIdx + 1);
   const traces = [];
 
-  // Candlestick
+  // Candlestick - only show visible bars
   traces.push({
     type: 'candlestick',
     x:     visibleDf.map(r => r.time),
@@ -754,34 +753,33 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
     whiskerwidth: 0.3,
   });
 
-  // Moving averages
-  const wTimes = windowDf.map(r => r.time);
+  // Moving averages - only show visible bars
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: wTimes,
-    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.ema6) ? r.ema6 : null),
+    x: visibleDf.map(r => r.time),
+    y: visibleDf.map(r => isFiniteNum(r.ema6) ? r.ema6 : null),
     name: 'EMA6',
     line: { color: '#58a6ff', width: 1.5 },
     connectgaps: false,
   });
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: wTimes,
-    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.sma12) ? r.sma12 : null),
+    x: visibleDf.map(r => r.time),
+    y: visibleDf.map(r => isFiniteNum(r.sma12) ? r.sma12 : null),
     name: 'SMA12',
     line: { color: '#d29922', width: 1.5 },
     connectgaps: false,
   });
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: wTimes,
-    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.sma24) ? r.sma24 : null),
+    x: visibleDf.map(r => r.time),
+    y: visibleDf.map(r => isFiniteNum(r.sma24) ? r.sma24 : null),
     name: 'SMA24',
     line: { color: '#a371f7', width: 1.5 },
     connectgaps: false,
   });
 
-  // Completed trade markers
+  // Completed trade markers - show all in visible range
   const pastEntryX=[], pastEntryY=[], pastExitX=[], pastExitY=[];
   for (const trade of completedTrades) {
     if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
@@ -797,14 +795,14 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
     traces.push({
       type: 'scatter', mode: 'markers',
       x: pastEntryX, y: pastEntryY, name: 'Past Entries',
-      marker: { symbol: 'diamond', size: 10, color: '#3fb950', line: { color: '#fff', width: 1 } },
+      marker: { symbol: 'diamond', size: 12, color: '#3fb950', line: { color: '#fff', width: 1.5 } },
     });
   }
   if (pastExitX.length) {
     traces.push({
       type: 'scatter', mode: 'markers',
       x: pastExitX, y: pastExitY, name: 'Past Exits',
-      marker: { symbol: 'x', size: 10, color: '#f85149', line: { color: '#fff', width: 1 } },
+      marker: { symbol: 'x', size: 12, color: '#f85149', line: { color: '#fff', width: 1.5 } },
     });
   }
 
@@ -814,34 +812,34 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
     type: 'scatter', mode: 'markers',
     x: [currentRow.time], y: [currentRow.close],
     name: 'Current',
-    marker: { symbol: 'circle', size: 12, color: '#58a6ff', line: { color: '#fff', width: 2 } },
+    marker: { symbol: 'circle', size: 14, color: '#58a6ff', line: { color: '#fff', width: 2 } },
   });
 
-  const currentTs = contractDf[currentBarIdx].time;
-  const shapes = [
-    { type:'line', x0:currentTs, x1:currentTs, y0:0, y1:1, yref:'paper',
-      line:{ color:'#e6edf3', width:1, dash:'dash' } },
-  ];
+  // Fixed x-axis range showing exactly FIXED_CANDLES candles
+  const xMin = visibleDf[0].time;
+  const xMax = visibleDf[visibleDf.length - 1].time;
+  const xRange = [xMin, xMax];
 
   const layout = {
     paper_bgcolor: '#161b22',
     plot_bgcolor:  '#0d1117',
     font: { color: '#e6edf3', family: 'Inter, Segoe UI, sans-serif', size: 12 },
-    title: { text: `${APP.currentContractName} — continuous market flow`, font: { size: 14 }, x: 0.01 },
+    title: { text: `${APP.currentContractName} — continuous market flow (fixed scale)`, font: { size: 14 }, x: 0.01 },
     xaxis: {
       title: '', color: '#8b949e',
       gridcolor: '#21262d', zerolinecolor: '#30363d',
       rangeslider: { visible: false },
-      range: [windowDf[0].time, windowDf[windowDf.length-1].time],
+      range: xRange,
+      fixedrange: true, // Prevent user from zooming/panning
     },
     yaxis: {
       title: 'Price', color: '#8b949e',
       gridcolor: '#21262d', zerolinecolor: '#30363d',
+      autorange: true, // Auto-scale price axis
     },
     height: 500,
     margin: { t: 50, b: 40, l: 60, r: 20 },
     legend: { orientation: 'h', y: 1.06, x: 0, font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' },
-    shapes,
     uirevision: 'continuous-playback',
   };
 
