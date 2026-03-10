@@ -301,6 +301,17 @@
     .ledger-section {
       margin-bottom: 16px;
     }
+    .state-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 1200px) {
+      .state-grid {
+        grid-template-columns: 1fr;
+      }
+    }
     .table-wrap {
       overflow-x: auto;
       max-height: 240px;
@@ -548,7 +559,7 @@
     </div>
   </div>
 
-  <!-- ── Decision ledger ────────────────────────────────────────────────── -->
+  <!-- ── Decision ledger ────────────────────────── -->
   <div class="ledger-section card">
     <div class="card-header">
       <div class="card-title">Completed Trades</div>
@@ -570,6 +581,49 @@
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── State Vector Tables ────────────────────────── -->
+  <div class="state-grid">
+    <!-- VAE Latent z-vectors -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">VAE Latent z-vectors</div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="z-vectors-table">
+            <thead>
+              <tr>
+                <th>Index</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOM Indices -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">SOM Indices</div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="som-table">
+            <thead>
+              <tr>
+                <th>Index</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -805,36 +859,65 @@ function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
     connectgaps: false,
   });
 
-  // Completed trade markers - show all in visible range
-  const pastEntryX=[], pastEntryY=[], pastExitX=[], pastExitY=[];
+  // Completed trade markers with H and EXIT labels
+  const pastEntryX=[], pastEntryY=[], pastEntryText=[];
+  const pastExitX=[], pastExitY=[], pastExitText=[];
+  const holdMarkerX=[], holdMarkerY=[], holdMarkerText=[];
+  
   for (const trade of completedTrades) {
-    if (startIdx <= trade.entryBar && trade.entryBar <= endIdx && contractDf[trade.entryBar]) {
+    // Entry marker
+    if (contractDf[trade.entryBar]) {
       const entryBar = contractDf[trade.entryBar];
       if (entryBar && entryBar.time) {
         pastEntryX.push(entryBar.time);
         pastEntryY.push(trade.entryPrice);
+        pastEntryText.push('ENTRY');
       }
     }
-    if (startIdx <= trade.exitBar && trade.exitBar <= endIdx && contractDf[trade.exitBar]) {
+    // Exit marker
+    if (contractDf[trade.exitBar]) {
       const exitBar = contractDf[trade.exitBar];
       if (exitBar && exitBar.time) {
         pastExitX.push(exitBar.time);
         pastExitY.push(trade.exitPrice);
+        pastExitText.push('EXIT');
+      }
+    }
+    // Hold markers for bars between entry and exit
+    for (let i = trade.entryBar + 1; i < trade.exitBar; i++) {
+      if (contractDf[i] && contractDf[i].time && startIdx <= i && i <= endIdx) {
+        holdMarkerX.push(contractDf[i].time);
+        holdMarkerY.push(contractDf[i].close);
+        holdMarkerText.push('H');
       }
     }
   }
+  
   if (pastEntryX.length) {
     traces.push({
-      type: 'scatter', mode: 'markers',
-      x: pastEntryX, y: pastEntryY, name: 'Past Entries',
+      type: 'scatter', mode: 'markers+text',
+      x: pastEntryX, y: pastEntryY, text: pastEntryText, textposition: 'top center',
+      name: 'Entries',
       marker: { symbol: 'diamond', size: 12, color: '#3fb950', line: { color: '#fff', width: 1.5 } },
+      textfont: { color: '#3fb950', size: 9 },
     });
   }
   if (pastExitX.length) {
     traces.push({
-      type: 'scatter', mode: 'markers',
-      x: pastExitX, y: pastExitY, name: 'Past Exits',
+      type: 'scatter', mode: 'markers+text',
+      x: pastExitX, y: pastExitY, text: pastExitText, textposition: 'bottom center',
+      name: 'Exits',
       marker: { symbol: 'x', size: 12, color: '#f85149', line: { color: '#fff', width: 1.5 } },
+      textfont: { color: '#f85149', size: 9 },
+    });
+  }
+  if (holdMarkerX.length) {
+    traces.push({
+      type: 'scatter', mode: 'text',
+      x: holdMarkerX, y: holdMarkerY, text: holdMarkerText, textposition: 'middle center',
+      name: 'Hold',
+      textfont: { color: '#58a6ff', size: 11, weight: 'bold' },
+      showlegend: false,
     });
   }
 
@@ -944,6 +1027,33 @@ function renderBar(barIdx) {
       + kvRow('Direction', '—')
       + kvRow('Bars held', '—')
       + kvRow('Unrealized PnL', '—');
+  }
+
+  // Populate z-vectors and SOM tables
+  const row_data = APP.currentContractData[barIdx];
+  if (row_data) {
+    // Z-vectors (extract all z0-z9 fields if they exist)
+    const zVectors = [];
+    for (let i = 0; i < 10; i++) {
+      const key = `z${i}`;
+      if (key in row_data) {
+        zVectors.push({ idx: i, val: row_data[key] });
+      }
+    }
+    const zTbody = document.querySelector('#z-vectors-table tbody');
+    if (zTbody) {
+      zTbody.innerHTML = zVectors.map(z => `<tr><td>${z.idx}</td><td>${fmt(z.val, 6)}</td></tr>`).join('');
+    }
+
+    // SOM indices
+    const somData = [];
+    if ('som_id' in row_data) somData.push({ label: 'SOM ID', val: row_data['som_id'] });
+    if ('som_x' in row_data) somData.push({ label: 'SOM X', val: row_data['som_x'] });
+    if ('som_y' in row_data) somData.push({ label: 'SOM Y', val: row_data['som_y'] });
+    const somTbody = document.querySelector('#som-table tbody');
+    if (somTbody) {
+      somTbody.innerHTML = somData.map((s, i) => `<tr><td>${s.label}</td><td>${fmt(s.val, 0)}</td></tr>`).join('');
+    }
   }
 
   // Update status
