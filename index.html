@@ -1,1248 +1,1041 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TFL-Collie — Continuous Rolling Playback Dashboard</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TFL-Collie · SAC Rolling Playback</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --surface2: #21262d;
+    --border:   #30363d;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --accent:   #58a6ff;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --yellow:   #d29922;
+    --purple:   #a371f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+  }
 
-  <!-- Plotly.js -->
-  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .header-logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px;
+  }
+  .header-title { font-size: 17px; font-weight: 600; }
+  .header-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .header-status {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; } 50% { opacity:.3; }
+  }
 
-  <style>
-    /* ─── Reset & Base ─────────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ── Main layout ── */
+  .main { padding: 16px 24px; }
 
-    :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --surface2:  #1c2330;
-      --border:    #30363d;
-      --accent:    #58a6ff;
-      --accent2:   #3fb950;
-      --danger:    #f85149;
-      --warn:      #d29922;
-      --text:      #e6edf3;
-      --muted:     #8b949e;
-      --radius:    10px;
-      --font:      'Inter', 'Segoe UI', system-ui, sans-serif;
-    }
+  /* ── Controls row ── */
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .ctrl-group { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+  .ctrl-label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  select, input[type=range] { width: 100%; }
+  select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  input[type=range] { accent-color: var(--accent); cursor: pointer; }
+  .btn-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  button {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  .btn-green  { background: var(--green);  color: #000; }
+  .btn-blue   { background: var(--accent); color: #000; }
+  .btn-red    { background: var(--red);    color: #fff; }
+  .btn-yellow { background: var(--yellow); color: #000; }
 
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 14px;
-      line-height: 1.6;
-    }
+  /* ── Two-column layout ── */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 1100px) {
+    .content-grid { grid-template-columns: 1fr; }
+  }
 
-    /* ─── Layout ────────────────────────────────────────────────────────────── */
-    .app-wrapper {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      max-width: 1600px;
-      margin: 0 auto;
-      padding: 0 20px 40px;
-    }
+  /* ── Chart card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .card-body { padding: 12px 16px; }
 
-    /* ─── Header ────────────────────────────────────────────────────────────── */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 0 14px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .logo-icon {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, var(--accent), #a371f7);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 700; color: #fff;
-    }
-    .logo-text h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-    .logo-text p  { font-size: 12px; color: var(--muted); }
-    .header-badge {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .header-badge span { color: var(--accent2); font-weight: 600; }
+  /* ── Side panel ── */
+  .side-panel { display: flex; flex-direction: column; gap: 12px; }
+  .info-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .info-box-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .5px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .indicator {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .indicator.green  { background: var(--green); }
+  .indicator.yellow { background: var(--yellow); }
+  .indicator.purple { background: var(--purple); }
+  .info-box-body { padding: 10px 12px; }
+  .kv-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(48,54,61,.4);
+    font-size: 12px;
+  }
+  .kv-row:last-child { border-bottom: none; }
+  .kv-key { color: var(--muted); }
+  .kv-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .kv-val.pos { color: var(--green); }
+  .kv-val.neg { color: var(--red); }
 
-    /* ─── Status bar ─────────────────────────────────────────────────────────── */
-    #status-bar {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 10px 16px;
-      margin-bottom: 16px;
-      font-size: 13px;
-      color: var(--muted);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    #status-bar .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--accent2);
-      flex-shrink: 0;
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%,100% { opacity: 1; }
-      50%      { opacity: 0.3; }
-    }
+  /* ── Trigger list ── */
+  .trigger-item {
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 5px;
+    background: var(--surface2);
+    margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px;
+    transition: background .1s;
+  }
+  .trigger-item:hover { background: var(--border); }
+  .trigger-item.active { border-left: 3px solid var(--accent); }
 
-    /* ─── Controls panel ─────────────────────────────────────────────────────── */
-    .controls-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 20px;
-      margin-bottom: 16px;
-    }
-    .controls-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 14px;
-    }
-    .ctrl-group label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    .ctrl-group select,
-    .ctrl-group input[type="range"] {
-      width: 100%;
-    }
-    select {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      padding: 7px 10px;
-      font-size: 13px;
-      appearance: none;
-      cursor: pointer;
-      outline: none;
-      transition: border-color .15s;
-    }
-    select:focus { border-color: var(--accent); }
+  /* ── Bottom tables ── */
+  .bottom-section { margin-top: 14px; }
+  .tables-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+  }
+  @media (max-width: 1100px) {
+    .tables-grid { grid-template-columns: 1fr; }
+  }
+  .table-wrap {
+    overflow-x: auto;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  thead th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    padding: 7px 10px;
+    text-align: left;
+    position: sticky; top: 0; z-index: 1;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid rgba(48,54,61,.4); }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 5px 10px; }
+  .pnl-pos { color: var(--green); font-weight: 600; }
+  .pnl-neg { color: var(--red);   font-weight: 600; }
 
-    input[type="range"] {
-      -webkit-appearance: none;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      cursor: pointer;
-      outline: none;
-      margin-top: 4px;
-    }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-    }
-    .range-display {
-      font-size: 12px;
-      color: var(--accent);
-      font-weight: 600;
-      margin-top: 3px;
-    }
-
-    /* ─── Buttons ────────────────────────────────────────────────────────────── */
-    .btn-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
-      flex-wrap: wrap;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: none;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity .15s, transform .1s;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn-primary   { background: var(--accent);  color: #0d1117; }
-    .btn-success   { background: var(--accent2); color: #0d1117; }
-    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-    .btn-danger    { background: var(--danger);  color: #fff; }
-    .btn:disabled  { opacity: 0.4; cursor: not-allowed; }
-
-    /* ─── Main content area ──────────────────────────────────────────────────── */
-    .main-grid {
-      display: grid;
-      grid-template-columns: 1fr 320px;
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-    @media (max-width: 1100px) {
-      .main-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ─── Chart card ─────────────────────────────────────────────────────────── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .card-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .card-title .badge {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 1px 7px;
-      font-size: 11px;
-      color: var(--muted);
-    }
-    .card-body { padding: 0; }
-
-    #chart-container {
-      width: 100%;
-      height: 520px;
-    }
-
-    /* ─── Side panel ─────────────────────────────────────────────────────────── */
-    .side-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    /* ─── Info boxes ─────────────────────────────────────────────────────────── */
-    .info-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .info-box-header {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .info-box-header .indicator {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-    }
-    .agent-a .info-box-header .indicator { background: #3fb950; }
-    .agent-b .info-box-header .indicator { background: #58a6ff; }
-    .summary-box .info-box-header .indicator { background: #d29922; }
-
-    .info-box-body {
-      padding: 12px 14px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .kv-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(48,54,61,0.5);
-      font-size: 12px;
-    }
-    .kv-row:last-child { border-bottom: none; }
-    .kv-key  { color: var(--muted); }
-    .kv-val  { color: var(--text); font-weight: 600; font-family: 'Courier New', monospace; }
-    .kv-val.long  { color: var(--accent2); }
-    .kv-val.short { color: var(--danger); }
-    .kv-val.hold  { color: var(--accent); }
-    .kv-val.exit  { color: var(--warn); }
-    .kv-val.pos   { color: var(--accent2); }
-    .kv-val.neg   { color: var(--danger); }
-
-    /* ─── Decision ledger ────────────────────────────────────────────────────── */
-    .ledger-section {
-      margin-bottom: 16px;
-    }
-    .state-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 16px;
-    }
-    @media (max-width: 1200px) {
-      .state-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    .table-wrap {
-      overflow-x: auto;
-      max-height: 240px;
-      overflow-y: auto;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    thead th {
-      background: var(--surface2);
-      color: var(--muted);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      padding: 8px 10px;
-      text-align: left;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      border-bottom: 1px solid var(--border);
-    }
-    tbody tr {
-      border-bottom: 1px solid rgba(48,54,61,0.4);
-      transition: background .1s;
-    }
-    tbody tr:hover { background: var(--surface2); }
-    tbody td {
-      padding: 6px 10px;
-      color: var(--text);
-    }
-    .action-hold { color: var(--accent);  font-weight: 700; }
-    .action-exit { color: var(--warn);    font-weight: 700; }
-    .pnl-pos     { color: var(--accent2); }
-    .pnl-neg     { color: var(--danger);  }
-
-    /* ─── State vector section ───────────────────────────────────────────────── */
-    .state-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-bottom: 16px;
-    }
-    @media (max-width: 800px) {
-      .state-grid { grid-template-columns: 1fr; }
-    }
-
-    /* ─── Progress bar ───────────────────────────────────────────────────────── */
-    .progress-wrap {
-      background: var(--surface2);
-      border-radius: 4px;
-      height: 6px;
-      margin: 8px 0 4px;
-      overflow: hidden;
-    }
-    .progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), #a371f7);
-      border-radius: 4px;
-      transition: width .3s ease;
-    }
-
-    /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    /* ─── Loading overlay ────────────────────────────────────────────────────── */
-    #loading {
-      position: fixed; inset: 0;
-      background: rgba(13,17,23,0.92);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      z-index: 9999;
-      gap: 16px;
-    }
-    .spinner {
-      width: 40px; height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { color: var(--muted); font-size: 13px; }
-
-    /* ─── Tooltip-like reason text ───────────────────────────────────────────── */
-    .reason-text {
-      font-size: 11px;
-      color: var(--muted);
-      font-style: italic;
-      max-width: 260px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* ─── Footer ─────────────────────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 14px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-  </style>
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 14px;
+    color: var(--muted);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+  }
+</style>
 </head>
 <body>
 
-<!-- Loading overlay -->
-<div id="loading">
-  <div class="spinner"></div>
-  <p>Initialising TFL-Collie continuous playback dashboard…</p>
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-logo">C</div>
+  <div>
+    <div class="header-title">TFL-Collie</div>
+    <div class="header-sub">SAC Model · Natural Gas · Rolling Playback</div>
+  </div>
+  <div class="header-status">
+    <div class="pulse"></div>
+    <span id="status-text">Loading…</span>
+  </div>
 </div>
 
-<div class="app-wrapper">
+<!-- ── Main ───────────────────────────────────────────────────────────── -->
+<div class="main">
 
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <header>
-    <div class="logo">
-      <div class="logo-icon">C</div>
-      <div class="logo-text">
-        <h1>TFL-Collie</h1>
-        <p>SAC Model · Natural Gas · Continuous Rolling Playback</p>
-      </div>
+  <!-- Controls -->
+  <div class="controls-row">
+    <div class="ctrl-group" style="min-width:200px;">
+      <div class="ctrl-label">Contract</div>
+      <select id="contract-select"></select>
     </div>
-    <div class="header-badge">
-      Mode: <span id="model-label">Continuous Market Flow</span>
+    <div class="ctrl-group" style="min-width:180px;">
+      <div class="ctrl-label">Playback Position — <span id="bar-label">0</span></div>
+      <input type="range" id="bar-slider" min="0" max="100" value="0">
     </div>
-  </header>
-
-  <!-- ── Status bar ─────────────────────────────────────────────────────── -->
-  <div id="status-bar">
-    <div class="dot"></div>
-    <span id="status-text">Loading dataset metadata…</span>
-  </div>
-
-  <!-- ── Controls ───────────────────────────────────────────────────────── -->
-  <div class="controls-panel">
-    <div class="controls-grid">
-      <div class="ctrl-group">
-        <label>Contract</label>
-        <select id="contract-select"></select>
-      </div>
-      <div class="ctrl-group">
-        <label>Playback position — <span id="bar-label">0</span></label>
-        <input type="range" id="bar-slider" min="0" max="0" value="0" />
-        <div class="progress-wrap">
-          <div class="progress-bar" id="bar-progress" style="width:0%"></div>
-        </div>
-      </div>
-      <div class="ctrl-group">
-        <label>Speed (s/candle) — <span id="speed-label">1.0</span>s</label>
-        <input type="range" id="speed-slider" min="0.2" max="3.0" step="0.1" value="1.0" />
-      </div>
-      <div class="ctrl-group">
-        <label>Lookback bars — <span id="lookback-label">120</span></label>
-        <input type="range" id="lookback-slider" min="40" max="300" step="10" value="120" />
-      </div>
-      <div class="ctrl-group">
-        <label>Lookahead bars — <span id="lookahead-label">20</span></label>
-        <input type="range" id="lookahead-slider" min="0" max="80" step="5" value="20" />
-      </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">Speed (s/bar) — <span id="speed-label">0.5</span>s</div>
+      <input type="range" id="speed-slider" min="0.05" max="3" step="0.05" value="0.5">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">Lookback bars — <span id="lookback-label">60</span></div>
+      <input type="range" id="lookback-slider" min="20" max="200" step="5" value="60">
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" id="render-btn">🔄 Render</button>
-      <button class="btn btn-primary"   id="play-btn">▶ Play</button>
-      <button class="btn btn-success"   id="play-all-btn">▶▶ Play all triggers</button>
-      <button class="btn btn-danger"    id="stop-btn" disabled>⏸ Stop</button>
+      <button class="btn-green"  id="play-btn">▶ Play</button>
+      <button class="btn-blue"   id="play-all-btn">▶▶ Play All</button>
+      <button class="btn-red"    id="stop-btn">■ Stop</button>
     </div>
   </div>
 
-  <!-- ── Main grid ──────────────────────────────────────────────────────── -->
-  <div class="main-grid">
+  <!-- Chart + Side panel -->
+  <div class="content-grid">
 
     <!-- Chart -->
     <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          Continuous Market Playback
-          <span class="badge" id="chart-badge">—</span>
-        </div>
-        <div style="font-size:12px;color:var(--muted);">
-          Bar <span id="bar-counter" style="color:var(--accent);font-weight:700;">—</span>
-        </div>
-      </div>
-      <div class="card-body">
-        <div id="chart-container"></div>
-      </div>
+      <div class="card-header" id="chart-title">Chart</div>
+      <div id="chart" style="height:520px;"></div>
     </div>
 
     <!-- Side panel -->
     <div class="side-panel">
 
-      <!-- Active Trade -->
-      <div class="info-box agent-a">
-        <div class="info-box-header">
-          <div class="indicator"></div>
-          Active Trade
-        </div>
-        <div class="info-box-body" id="active-trade-body">
+      <!-- Agent A -->
+      <div class="info-box">
+        <div class="info-box-header"><div class="indicator green"></div>Agent A (Entry)</div>
+        <div class="info-box-body" id="agent-a-panel">
           <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Entry bar</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Entry price</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Direction</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Bars held</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Unrealized PnL</span><span class="kv-val">—</span></div>
         </div>
       </div>
 
-      <!-- Market Info -->
-      <div class="info-box agent-b">
-        <div class="info-box-header">
-          <div class="indicator"></div>
-          Market Info
-        </div>
-        <div class="info-box-body" id="market-info-body">
-          <div class="kv-row"><span class="kv-key">Current price</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Bar time</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Open</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">High</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Low</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">ATR</span><span class="kv-val">—</span></div>
+      <!-- Agent B -->
+      <div class="info-box">
+        <div class="info-box-header"><div class="indicator"></div>Agent B (Hold/Exit)</div>
+        <div class="info-box-body" id="agent-b-panel">
+          <div class="kv-row"><span class="kv-key">Decision</span><span class="kv-val">—</span></div>
         </div>
       </div>
 
-      <!-- Triggers List -->
-      <div class="info-box summary-box">
+      <!-- Active trade -->
+      <div class="info-box">
+        <div class="info-box-header"><div class="indicator yellow"></div>Active Trade</div>
+        <div class="info-box-body" id="trade-panel">
+          <div class="kv-row"><span class="kv-key">No active trade</span><span class="kv-val"></span></div>
+        </div>
+      </div>
+
+      <!-- Triggers -->
+      <div class="info-box">
         <div class="info-box-header">
-          <div class="indicator"></div>
+          <div class="indicator purple"></div>
           Triggers (<span id="trigger-count">0</span>)
         </div>
-        <div class="info-box-body" id="triggers-list" style="max-height:250px;overflow-y:auto;">
-          <!-- Dynamically populated -->
+        <div class="info-box-body" id="triggers-list" style="max-height:220px;overflow-y:auto;padding:8px;">
+          <div style="color:var(--muted);font-size:11px;">Select a contract to load triggers</div>
         </div>
       </div>
 
     </div>
   </div>
 
-  <!-- ── Decision ledger ────────────────────────── -->
-  <div class="ledger-section card">
-    <div class="card-header">
-      <div class="card-title">Completed Trades</div>
-    </div>
-    <div class="card-body">
-      <div class="table-wrap">
-        <table id="ledger-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Entry Bar</th>
-              <th>Entry Time</th>
-              <th>Exit Bar</th>
-              <th>Exit Time</th>
-              <th>Direction</th>
-              <th>Realized PnL (¢)</th>
-              <th>Exit Reason</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+  <!-- Bottom tables -->
+  <div class="bottom-section">
+    <div class="tables-grid">
+
+      <!-- Completed trades ledger -->
+      <div class="card">
+        <div class="card-header">Completed Trades</div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table id="ledger-table">
+              <thead>
+                <tr>
+                  <th>#</th><th>Entry</th><th>Exit</th><th>Dir</th><th>PnL (¢)</th><th>Reason</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
+
+      <!-- VAE z-vectors -->
+      <div class="card">
+        <div class="card-header">VAE Latent z-vectors (z00–z31)</div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table id="z-table">
+              <thead><tr><th>Index</th><th>Value</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SOM IDs -->
+      <div class="card">
+        <div class="card-header">SOM Node IDs</div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table id="som-table">
+              <thead><tr><th>Map</th><th>Node ID</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- ── State Vector Tables ────────────────────────── -->
-  <div class="state-grid">
-    <!-- VAE Latent z-vectors -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">VAE Latent z-vectors</div>
-      </div>
-      <div class="card-body">
-        <div class="table-wrap">
-          <table id="z-vectors-table">
-            <thead>
-              <tr>
-                <th>Index</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+</div>
 
-    <!-- SOM Indices -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">SOM Indices</div>
-      </div>
-      <div class="card-body">
-        <div class="table-wrap">
-          <table id="som-table">
-            <thead>
-              <tr>
-                <th>Index</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
-  <footer>
-    <span>TFL-Collie · SAC Model for Natural Gas · Continuous Rolling Playback</span>
-    <span>
-      <a href="https://github.com/ebarros23/Collie" target="_blank">GitHub Repository</a>
-      &nbsp;·&nbsp; Built with Plotly.js
-    </span>
-  </footer>
-
-</div><!-- /.app-wrapper -->
+<footer>TFL-Collie · SAC Model for Natural Gas · Continuous Rolling Playback</footer>
 
 <script>
-/* ═══════════════════════════════════════════════════════════════════════════
-   TFL-Collie Dashboard — Continuous Market Flow with Persistent Trade Markers
-   Supports 100+ contracts with efficient lazy loading from data/ folder
-   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
 
-// ── Constants (mirrored from Python) ────────────────────────────────────────
-const MAX_HOLD          = 28;
-const MIN_HOLD_BARS     = 5;
-const TRANSACTION_COST  = 0.05;
-const CENT              = 0.01;
-const MAX_REWARD_CLIP   = 10.0;
-const DEFAULT_LOOKBACK  = 120;
-const DEFAULT_LOOKAHEAD = 20;
-const REGIME_TOP_PCT    = 0.40;
-const REGIME_BOTTOM_PCT = 0.40;
-const REGIME_MIN_SAMPLES = 30;
+// ── Constants ─────────────────────────────────────────────────────────────────
+const MIN_HOLD   = 5;
+const MAX_HOLD   = 40;
+const CENT       = 100;
+const TRANS_COST = 0.5;
 
-// ── App state ────────────────────────────────────────────────────────────────
-let APP = {
-  metadata: null,
-  currentContractData: null,
-  currentContractName: null,
-  currentBarIdx: 0,
-  isPlaying: false,
-  playTimer: null,
-  completedTrades: [],
-  activeTrade: null,
-  allTriggers: [],
+// ── App state ─────────────────────────────────────────────────────────────────
+const APP = {
+  metadata:        null,
+  contractData:    [],          // all bars for current contract
+  contractName:    '',
+  allTriggers:     [],          // triggers for current contract
+  currentBarIdx:   0,
+  completedTrades: [],          // { entryBar, entryPrice, entryDir, exitBar, exitPrice, pnl, reason }
+  activeTrade:     null,        // { entryBar, entryPrice, entryDir, barsHeld, forcedExit }
+  playTimer:       null,
+  isPlaying:       false,
+  playAllIdx:      0,           // which trigger we're currently playing in play-all mode
+  playAllMode:     false,
 };
 
-// ── Utility ──────────────────────────────────────────────────────────────────
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function sign(v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
-function isFiniteNum(v) { return typeof v === 'number' && isFinite(v); }
-function fmt(v, d=4) { return isFiniteNum(v) ? v.toFixed(d) : '—'; }
-// ── Load contract data ───────────────────────────────────────────────
-async function loadContractData(contract) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const isNum  = v => typeof v === 'number' && isFinite(v);
+const fmt4   = v => isNum(v) ? v.toFixed(4) : '—';
+const fmt2   = v => isNum(v) ? v.toFixed(2) : '—';
+const fmt0   = v => isNum(v) ? Math.round(v).toString() : '—';
+
+function kv(key, val, cls='') {
+  return `<div class="kv-row"><span class="kv-key">${key}</span><span class="kv-val ${cls}">${val}</span></div>`;
+}
+
+// ── Load metadata ─────────────────────────────────────────────────────────────
+async function loadMetadata() {
+  const r = await fetch('data/metadata.json');
+  if (!r.ok) throw new Error('Cannot load metadata.json');
+  return r.json();
+}
+
+// ── Load contract data ────────────────────────────────────────────────────────
+async function loadContractData(name) {
+  const r = await fetch(`data/${name}.json`);
+  if (!r.ok) throw new Error(`Cannot load ${name}.json`);
+  const rows = await r.json();
+  return rows.map(row => ({
+    ...row,
+    time:            row.time   || '',
+    open:            parseFloat(row.open)  || 0,
+    high:            parseFloat(row.high)  || 0,
+    low:             parseFloat(row.low)   || 0,
+    close:           parseFloat(row.close) || 0,
+    ema6:            isNum(parseFloat(row.ema6))  ? parseFloat(row.ema6)  : null,
+    sma12:           isNum(parseFloat(row.sma12)) ? parseFloat(row.sma12) : null,
+    sma24:           isNum(parseFloat(row.sma24)) ? parseFloat(row.sma24) : null,
+    atr:             isNum(parseFloat(row.atr))   ? parseFloat(row.atr)   : null,
+    confirmed_entry: row.confirmed_entry === true || row.confirmed_entry === 'True',
+    entry_direction: parseFloat(row.entry_direction) || 0,
+    fast_signal:     parseFloat(row.fast_signal)     || 0,
+    slow_signal:     parseFloat(row.slow_signal)     || 0,
+    fmt_id:          parseInt(row.fmt_id)  ?? -1,
+    pos_id:          parseInt(row.pos_id)  ?? -1,
+    reg_id:          parseInt(row.reg_id)  ?? -1,
+    reg_valid:       row.reg_valid === true || row.reg_valid === 'True',
+  }));
+}
+
+// ── Populate contract dropdown ────────────────────────────────────────────────
+function populateContracts() {
+  const sel = document.getElementById('contract-select');
+  sel.innerHTML = APP.metadata.contracts
+    .map(c => `<option value="${c}">${c.replace(/_intraday.*/, '')}</option>`)
+    .join('');
+}
+
+// ── Load a contract and populate triggers ─────────────────────────────────────
+async function loadContract() {
+  stopPlayback();
+  const name = document.getElementById('contract-select').value;
+  document.getElementById('status-text').textContent = `Loading ${name}…`;
+
   try {
-    const resp = await fetch(`data/${contract}.json`);
-    if (!resp.ok) throw new Error(`Failed to load ${contract}`);
-    const rows = await resp.json();
-    return rows.map(r => {
-      const v = {
-        ...r,
-        time:            r.time || '',
-        bar_idx:         parseInt(r.bar_idx)   || 0,
-        open:            parseFloat(r.open)    || 0,
-        high:            parseFloat(r.high)    || 0,
-        low:             parseFloat(r.low)     || 0,
-        close:           parseFloat(r.close)   || 0,
-        atr:             isFiniteNum(parseFloat(r.atr)) ? parseFloat(r.atr) : null,
-        ema6:            isFiniteNum(parseFloat(r.ema6)) ? parseFloat(r.ema6) : null,
-        sma12:           isFiniteNum(parseFloat(r.sma12)) ? parseFloat(r.sma12) : null,
-        sma24:           isFiniteNum(parseFloat(r.sma24)) ? parseFloat(r.sma24) : null,
-        confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
-        entry_direction: parseFloat(r.entry_direction) || 0,
-        fast_signal:     parseFloat(r.fast_signal)     || 0,
-      };
-      return v;
-    });
-  } catch(e) {
-    console.error(`Error loading ${contract}:`, e);
-    return [];
-  }
-}
+    APP.contractData    = await loadContractData(name);
+    APP.contractName    = name;
+    APP.currentBarIdx   = 0;
+    APP.completedTrades = [];
+    APP.activeTrade     = null;
+    APP.playAllIdx      = 0;
+    APP.playAllMode     = false;
 
-// ── Find forced exit bar ──────────────────────────────────────────────────────
-function findForcedExitBar(contractDf, entryBar, entryDirection) {
-  const endCap = Math.min(contractDf.length - 1, entryBar + MAX_HOLD);
-  for (let i = entryBar; i <= endCap; i++) {
-    const fs = contractDf[i].fast_signal;
-    if (isFiniteNum(fs) && fs === -entryDirection) return i;
-  }
-  return endCap;
-}
+    // Update bar slider
+    const slider = document.getElementById('bar-slider');
+    slider.max   = APP.contractData.length - 1;
+    slider.value = 0;
+    document.getElementById('bar-label').textContent = '0';
 
-// ── Simulate a single trade ──────────────────────────────────────────────────
-function simulateTrade(contractDf, triggerBarIdx) {
-  const trigRow = contractDf[triggerBarIdx];
-  const entryDirection = sign(trigRow.entry_direction);
-  if (triggerBarIdx + 1 >= contractDf.length) return null;
-  
-  const entryBar = triggerBarIdx + 1;
-  const entryRow = contractDf[entryBar];
-  const entryPrice = entryRow.close;
-  const entryTime = entryRow.time;
-  
-  const forcedExitBar = findForcedExitBar(contractDf, entryBar, entryDirection);
-  const position = entryDirection > 0 ? 1 : -1;
-  
-  let exitBar = forcedExitBar;
-  let exitReason = "Forced exit";
-  let barsHeld = 0;
-  let maxUnrealized = 0;
-  
-  for (let i = entryBar; i <= forcedExitBar && i < contractDf.length; i++) {
-    const row = contractDf[i];
-    const c = row.close;
-    const unreal = (c - entryPrice) * position / CENT;
-    maxUnrealized = Math.max(maxUnrealized, unreal);
-    
-    // Simple heuristic: exit if drawdown > threshold or bars held > MAX_HOLD
-    if (i > entryBar && barsHeld >= MIN_HOLD_BARS) {
-      const dd = maxUnrealized - unreal;
-      if (dd > 5.0) { // Simple drawdown threshold
-        exitBar = i;
-        exitReason = "Drawdown exit";
-        break;
-      }
+    // Find triggers for this contract
+    APP.allTriggers = APP.metadata.tradeIndex.filter(t => t.contract === name);
+
+    // Render trigger list
+    const listEl = document.getElementById('triggers-list');
+    if (APP.allTriggers.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;">No triggers found</div>';
+    } else {
+      listEl.innerHTML = APP.allTriggers.map((t, i) =>
+        `<div class="trigger-item" id="trig-${i}" onclick="jumpToTrigger(${i})">
+          <span style="color:var(--accent);font-weight:600;">T${i+1}</span>
+          <span style="color:var(--muted);font-size:10px;">${t.label}</span>
+        </div>`
+      ).join('');
     }
-    
-    if (i >= forcedExitBar) {
-      exitBar = i;
-      exitReason = "Forced exit: opposite fast signal or max-hold cap";
+    document.getElementById('trigger-count').textContent = APP.allTriggers.length;
+
+    document.getElementById('status-text').textContent =
+      `${name.replace(/_intraday.*/, '')} · ${APP.contractData.length} bars · ${APP.allTriggers.length} triggers`;
+
+    renderBar(0);
+  } catch(e) {
+    document.getElementById('status-text').textContent = 'Error: ' + e.message;
+    console.error(e);
+  }
+}
+
+// ── Jump to a specific trigger ────────────────────────────────────────────────
+function jumpToTrigger(idx) {
+  if (idx < 0 || idx >= APP.allTriggers.length) return;
+  stopPlayback();
+
+  // Highlight active trigger
+  document.querySelectorAll('.trigger-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`trig-${idx}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
+
+  const bar = APP.allTriggers[idx].localIdx;
+  document.getElementById('bar-slider').value = bar;
+  document.getElementById('bar-label').textContent = bar;
+  renderBar(bar);
+}
+
+// ── Simulate one trade from a trigger bar ─────────────────────────────────────
+function simulateTrade(triggerBar) {
+  const df = APP.contractData;
+  const trigRow = df[triggerBar];
+  if (!trigRow || !trigRow.confirmed_entry) return null;
+
+  const dir = trigRow.entry_direction > 0 ? 1 : -1;
+  const entryBar = triggerBar + 1;
+  if (entryBar >= df.length) return null;
+
+  const entryPrice = df[entryBar].close;
+
+  // Find forced exit
+  let forcedExit = entryBar + MAX_HOLD;
+  for (let i = entryBar + 1; i < Math.min(df.length, entryBar + MAX_HOLD + 1); i++) {
+    const sig = df[i].fast_signal;
+    if (isNum(sig) && sig !== 0 && Math.sign(sig) !== dir) {
+      forcedExit = i;
       break;
     }
-    
-    barsHeld++;
   }
-  
-  const exitRow = contractDf[exitBar];
-  const exitPrice = exitRow.close;
-  const exitTime = exitRow.time;
-  const realizedPnl = (exitPrice - entryPrice) * position / CENT - TRANSACTION_COST;
-  
-  return {
-    triggerBarIdx,
-    entryBar,
-    entryTime,
-    entryPrice,
-    entryDirection,
-    exitBar,
-    exitTime,
-    exitPrice,
-    realizedPnlCents: realizedPnl,
-    exitReason,
-    barsHeld,
-  };
-}
 
-// ── Window bounds ────────────────────────────────────────────────────────────
-function windowBounds(nRows, currentBarIdx, lookback, lookahead) {
-  const start = Math.max(0, currentBarIdx - Math.max(lookback, 1));
-  const end   = Math.min(nRows - 1, currentBarIdx + Math.max(lookahead, 0));
-  return { start, end };
-}
+  // Simulate Agent B decisions bar by bar
+  let exitBar = Math.min(forcedExit, df.length - 1);
+  let exitReason = 'Forced exit (max hold / opposite signal)';
 
-// ── Build Plotly figure ──────────────────────────────────────────────────────
-function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
-  if (!contractDf || contractDf.length === 0 || currentBarIdx >= contractDf.length) {
-    return { traces: [], layout: {} }; // Return empty chart if data is invalid
-  }
-  
-  const FIXED_CANDLES = 60; // Fixed number of candles visible at once
-  const startIdx = Math.max(0, currentBarIdx - FIXED_CANDLES + 1);
-  const endIdx = currentBarIdx;
-  
-  const visibleDf = contractDf.slice(startIdx, endIdx + 1);
-  if (visibleDf.length === 0) {
-    return { traces: [], layout: {} }; // Return empty chart if no visible data
-  }
-  
-  const traces = [];
-
-  // Candlestick - only show visible bars
-  const candleX = [];
-  const candleOpen = [];
-  const candleHigh = [];
-  const candleLow = [];
-  const candleClose = [];
-  for (const r of visibleDf) {
-    if (r && r.time) {
-      candleX.push(r.time);
-      candleOpen.push(r.open || null);
-      candleHigh.push(r.high || null);
-      candleLow.push(r.low || null);
-      candleClose.push(r.close || null);
+  for (let i = entryBar + MIN_HOLD; i <= forcedExit && i < df.length; i++) {
+    const row = df[i];
+    const barsHeld = i - entryBar;
+    const unreal = (row.close - entryPrice) * dir / CENT;
+    if (unreal < -2.0) {
+      exitBar = i;
+      exitReason = 'Stop-loss';
+      break;
+    }
+    if (unreal > 3.0) {
+      exitBar = i;
+      exitReason = 'Take-profit';
+      break;
     }
   }
+
+  const exitPrice = df[exitBar].close;
+  const pnl = (exitPrice - entryPrice) * dir / CENT - TRANS_COST;
+
+  return { triggerBar, entryBar, entryPrice, entryDir: dir, exitBar, exitPrice, pnl, exitReason };
+}
+
+// ── Build Plotly figure ───────────────────────────────────────────────────────
+function buildFigure(barIdx) {
+  const df = APP.contractData;
+  if (!df || df.length === 0) return;
+
+  const lookback = parseInt(document.getElementById('lookback-slider').value) || 60;
+  const startIdx = Math.max(0, barIdx - lookback + 1);
+  const endIdx   = barIdx;
+
+  // Visible slice
+  const vis = df.slice(startIdx, endIdx + 1).filter(r => r && r.time);
+  if (vis.length === 0) return;
+
+  const traces = [];
+
+  // ── Candlestick ──
   traces.push({
     type: 'candlestick',
-    x: candleX,
-    open: candleOpen,
-    high: candleHigh,
-    low: candleLow,
-    close: candleClose,
+    x:     vis.map(r => r.time),
+    open:  vis.map(r => r.open),
+    high:  vis.map(r => r.high),
+    low:   vis.map(r => r.low),
+    close: vis.map(r => r.close),
     name: 'Price',
     increasing: { line: { color: '#3fb950', width: 1 } },
     decreasing: { line: { color: '#f85149', width: 1 } },
     whiskerwidth: 0.3,
+    showlegend: true,
   });
 
-  // Moving averages - only show visible bars
-  const maX = candleX;
+  // ── Moving averages ──
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: maX,
-    y: visibleDf.filter(r => r && r.time).map(r => isFiniteNum(r.ema6) ? r.ema6 : null),
+    x: vis.map(r => r.time),
+    y: vis.map(r => r.ema6),
     name: 'EMA6',
     line: { color: '#58a6ff', width: 1.5 },
     connectgaps: false,
   });
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: maX,
-    y: visibleDf.filter(r => r && r.time).map(r => isFiniteNum(r.sma12) ? r.sma12 : null),
+    x: vis.map(r => r.time),
+    y: vis.map(r => r.sma12),
     name: 'SMA12',
     line: { color: '#d29922', width: 1.5 },
     connectgaps: false,
   });
   traces.push({
     type: 'scatter', mode: 'lines',
-    x: maX,
-    y: visibleDf.filter(r => r && r.time).map(r => isFiniteNum(r.sma24) ? r.sma24 : null),
+    x: vis.map(r => r.time),
+    y: vis.map(r => r.sma24),
     name: 'SMA24',
     line: { color: '#a371f7', width: 1.5 },
     connectgaps: false,
   });
 
-  // Completed trade markers with H and EXIT labels
-  const pastEntryX=[], pastEntryY=[], pastEntryText=[];
-  const pastExitX=[], pastExitY=[], pastExitText=[];
-  const holdMarkerX=[], holdMarkerY=[], holdMarkerText=[];
-  
-  for (const trade of completedTrades) {
-    // Entry marker
-    if (contractDf[trade.entryBar]) {
-      const entryBar = contractDf[trade.entryBar];
-      if (entryBar && entryBar.time) {
-        pastEntryX.push(entryBar.time);
-        pastEntryY.push(trade.entryPrice);
-        pastEntryText.push('ENTRY');
+  // ── Trade markers (ALL completed trades + active trade) ──
+  const entryX=[], entryY=[], entryText=[];
+  const exitX=[], exitY=[], exitText=[];
+  const holdX=[], holdY=[], holdText=[];
+
+  const allTrades = [...APP.completedTrades];
+  if (APP.activeTrade) allTrades.push(APP.activeTrade);
+
+  for (const trade of allTrades) {
+    // Entry marker — show if within visible window
+    if (trade.entryBar >= startIdx && trade.entryBar <= endIdx) {
+      const b = df[trade.entryBar];
+      if (b && b.time) {
+        entryX.push(b.time);
+        entryY.push(trade.entryPrice);
+        entryText.push(trade.entryDir > 0 ? 'LONG' : 'SHORT');
       }
     }
-    // Exit marker
-    if (contractDf[trade.exitBar]) {
-      const exitBar = contractDf[trade.exitBar];
-      if (exitBar && exitBar.time) {
-        pastExitX.push(exitBar.time);
-        pastExitY.push(trade.exitPrice);
-        pastExitText.push('EXIT');
+
+    // Exit marker — show if within visible window
+    if (trade.exitBar !== undefined && trade.exitBar >= startIdx && trade.exitBar <= endIdx) {
+      const b = df[trade.exitBar];
+      if (b && b.time) {
+        exitX.push(b.time);
+        exitY.push(trade.exitPrice);
+        exitText.push('EXIT');
       }
     }
-    // Hold markers for bars between entry and exit
-    for (let i = trade.entryBar + 1; i < trade.exitBar; i++) {
-      if (contractDf[i] && contractDf[i].time && startIdx <= i && i <= endIdx) {
-        holdMarkerX.push(contractDf[i].time);
-        holdMarkerY.push(contractDf[i].close);
-        holdMarkerText.push('H');
+
+    // H markers for each hold bar within visible window
+    const holdEnd = trade.exitBar !== undefined ? trade.exitBar : barIdx;
+    for (let i = trade.entryBar + 1; i < holdEnd; i++) {
+      if (i >= startIdx && i <= endIdx && df[i] && df[i].time) {
+        holdX.push(df[i].time);
+        holdY.push(df[i].high * 1.0015);  // slightly above candle
+        holdText.push('H');
       }
     }
   }
-  
-  if (pastEntryX.length) {
+
+  if (entryX.length) {
     traces.push({
       type: 'scatter', mode: 'markers+text',
-      x: pastEntryX, y: pastEntryY, text: pastEntryText, textposition: 'top center',
-      name: 'Entries',
-      marker: { symbol: 'diamond', size: 12, color: '#3fb950', line: { color: '#fff', width: 1.5 } },
-      textfont: { color: '#3fb950', size: 9 },
+      x: entryX, y: entryY, text: entryText,
+      textposition: 'top center',
+      name: 'Entry',
+      marker: { symbol: 'triangle-up', size: 14, color: '#3fb950', line: { color: '#fff', width: 1 } },
+      textfont: { color: '#3fb950', size: 9, family: 'monospace' },
     });
   }
-  if (pastExitX.length) {
+  if (exitX.length) {
     traces.push({
       type: 'scatter', mode: 'markers+text',
-      x: pastExitX, y: pastExitY, text: pastExitText, textposition: 'bottom center',
-      name: 'Exits',
+      x: exitX, y: exitY, text: exitText,
+      textposition: 'bottom center',
+      name: 'Exit',
       marker: { symbol: 'x', size: 12, color: '#f85149', line: { color: '#fff', width: 1.5 } },
-      textfont: { color: '#f85149', size: 9 },
+      textfont: { color: '#f85149', size: 9, family: 'monospace' },
     });
   }
-  if (holdMarkerX.length) {
+  if (holdX.length) {
     traces.push({
       type: 'scatter', mode: 'text',
-      x: holdMarkerX, y: holdMarkerY, text: holdMarkerText, textposition: 'middle center',
+      x: holdX, y: holdY, text: holdText,
+      textposition: 'top center',
       name: 'Hold',
-      textfont: { color: '#58a6ff', size: 11, weight: 'bold' },
+      textfont: { color: '#58a6ff', size: 10, family: 'monospace' },
+      showlegend: true,
+    });
+  }
+
+  // ── Current bar marker ──
+  const cur = df[barIdx];
+  if (cur && cur.time) {
+    traces.push({
+      type: 'scatter', mode: 'markers',
+      x: [cur.time], y: [cur.close],
+      name: 'Now',
+      marker: { symbol: 'circle', size: 10, color: '#fff', line: { color: '#58a6ff', width: 2 } },
       showlegend: false,
     });
   }
 
-  // Current position marker
-  const currentRow = contractDf[currentBarIdx];
-  if (currentRow && currentRow.time && isFiniteNum(currentRow.close)) {
-    traces.push({
-      type: 'scatter', mode: 'markers',
-      x: [currentRow.time], y: [currentRow.close],
-      name: 'Current',
-      marker: { symbol: 'circle', size: 14, color: '#58a6ff', line: { color: '#fff', width: 2 } },
-    });
-  }
-
-  // Fixed x-axis range showing exactly FIXED_CANDLES candles
-  const xMin = visibleDf[0]?.time || new Date().toISOString();
-  const xMax = visibleDf[visibleDf.length - 1]?.time || new Date().toISOString();
-  const xRange = [xMin, xMax];
+  // ── Layout ──
+  const xMin = vis[0].time;
+  const xMax = vis[vis.length - 1].time;
 
   const layout = {
     paper_bgcolor: '#161b22',
     plot_bgcolor:  '#0d1117',
-    font: { color: '#e6edf3', family: 'Inter, Segoe UI, sans-serif', size: 12 },
-    title: { text: `${APP.currentContractName} — continuous market flow (fixed scale)`, font: { size: 14 }, x: 0.01 },
+    font: { color: '#e6edf3', family: 'Segoe UI, system-ui, sans-serif', size: 11 },
     xaxis: {
-      title: '', color: '#8b949e',
-      gridcolor: '#21262d', zerolinecolor: '#30363d',
+      color: '#8b949e', gridcolor: '#21262d', zerolinecolor: '#30363d',
       rangeslider: { visible: false },
-      range: xRange,
-      fixedrange: true, // Prevent user from zooming/panning
+      range: [xMin, xMax],
+      type: 'date',
     },
     yaxis: {
-      title: 'Price', color: '#8b949e',
+      title: 'Price ($/MMBtu)', color: '#8b949e',
       gridcolor: '#21262d', zerolinecolor: '#30363d',
-      autorange: true, // Auto-scale price axis
+      autorange: true,
     },
-    height: 500,
-    margin: { t: 50, b: 40, l: 60, r: 20 },
-    legend: { orientation: 'h', y: 1.06, x: 0, font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' },
-    uirevision: 'continuous-playback',
+    height: 520,
+    margin: { t: 10, b: 40, l: 70, r: 20 },
+    legend: {
+      orientation: 'h', y: 1.04, x: 0,
+      font: { size: 10 }, bgcolor: 'rgba(0,0,0,0)',
+    },
+    uirevision: APP.contractName,
   };
 
   return { traces, layout };
 }
 
-// ── Render current bar ───────────────────────────────────────────────
+// ── Render a specific bar ─────────────────────────────────────────────────────
 function renderBar(barIdx) {
-  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
-  
-  barIdx = clamp(barIdx, 0, APP.currentContractData.length - 1);
+  const df = APP.contractData;
+  if (!df || df.length === 0) return;
+  barIdx = Math.max(0, Math.min(barIdx, df.length - 1));
   APP.currentBarIdx = barIdx;
-  
-  const slider = document.getElementById('bar-slider');
-  slider.max = Math.max(0, APP.currentContractData.length - 1);
-  slider.value = barIdx;
+
+  // Update slider
+  document.getElementById('bar-slider').value = barIdx;
   document.getElementById('bar-label').textContent = barIdx;
-  const pct = APP.currentContractData.length > 1 ? (barIdx / (APP.currentContractData.length - 1) * 100) : 0;
-  document.getElementById('bar-progress').style.width = pct + '%';
-  document.getElementById('bar-counter').textContent = `${barIdx} / ${Math.max(0, APP.currentContractData.length - 1)}`;
 
-  const { traces, layout } = buildFigure(APP.currentContractData, barIdx, APP.completedTrades);
-  if (traces.length > 0) {
-    Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
-  }
-
-  const row = APP.currentContractData[barIdx];
-  if (!row) return; // Safety check
-  document.getElementById('chart-badge').textContent = APP.currentContractName;
-
-  // Market info
-  document.getElementById('market-info-body').innerHTML =
-    kvRow('Current price', fmt(row?.close, 5))
-    + kvRow('Bar time', row?.time || '—')
-    + kvRow('Open', fmt(row?.open, 5))
-    + kvRow('High', fmt(row?.high, 5))
-    + kvRow('Low', fmt(row?.low, 5))
-    + kvRow('ATR', fmt(row?.atr, 5));
-
-  // Active trade info
-  if (APP.activeTrade && row) {
-    const trade = APP.activeTrade;
-    if (barIdx >= trade.entryBar && barIdx < trade.exitBar) {
-      const unrealPnl = (row.close - trade.entryPrice) * trade.entryDirection / CENT;
-      const dirClass = trade.entryDirection > 0 ? 'long' : 'short';
-      const dirText  = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
-      document.getElementById('active-trade-body').innerHTML =
-        kvRow('Status', '<span class="kv-val hold">ACTIVE</span>', true)
-        + kvRow('Entry bar', trade.entryBar)
-        + kvRow('Entry price', fmt(trade.entryPrice, 5))
-        + kvRow('Direction', `<span class="kv-val ${dirClass}">${dirText}</span>`, true)
-        + kvRow('Bars held', barIdx - trade.entryBar)
-        + kvRow('Unrealized PnL', `<span class="kv-val ${unrealPnl >= 0 ? 'pos' : 'neg'}">${fmt(unrealPnl, 3)} ¢</span>`, true);
-    } else if (barIdx >= trade.exitBar) {
-      document.getElementById('active-trade-body').innerHTML =
-        kvRow('Status', '<span class="kv-val exit">CLOSED</span>', true)
-        + kvRow('Entry bar', trade.entryBar)
-        + kvRow('Exit bar', trade.exitBar)
-        + kvRow('Exit price', fmt(trade.exitPrice, 5))
-        + kvRow('Realized PnL', `<span class="kv-val ${trade.realizedPnlCents >= 0 ? 'pos' : 'neg'}">${fmt(trade.realizedPnlCents, 3)} ¢</span>`, true)
-        + kvRow('Exit reason', trade.exitReason);
-    }
-  } else {
-    document.getElementById('active-trade-body').innerHTML =
-      kvRow('Status', '<span class="kv-val muted">IDLE</span>', true)
-      + kvRow('Entry bar', '—')
-      + kvRow('Entry price', '—')
-      + kvRow('Direction', '—')
-      + kvRow('Bars held', '—')
-      + kvRow('Unrealized PnL', '—');
-  }
-
-  // Populate z-vectors and SOM tables
-  const row_data = APP.currentContractData[barIdx];
-  if (row_data) {
-    // Z-vectors (extract all z0-z9 fields if they exist)
-    const zVectors = [];
-    for (let i = 0; i < 10; i++) {
-      const key = `z${i}`;
-      if (key in row_data) {
-        zVectors.push({ idx: i, val: row_data[key] });
-      }
-    }
-    const zTbody = document.querySelector('#z-vectors-table tbody');
-    if (zTbody) {
-      zTbody.innerHTML = zVectors.map(z => `<tr><td>${z.idx}</td><td>${fmt(z.val, 6)}</td></tr>`).join('');
-    }
-
-    // SOM indices
-    const somData = [];
-    if ('som_id' in row_data) somData.push({ label: 'SOM ID', val: row_data['som_id'] });
-    if ('som_x' in row_data) somData.push({ label: 'SOM X', val: row_data['som_x'] });
-    if ('som_y' in row_data) somData.push({ label: 'SOM Y', val: row_data['som_y'] });
-    const somTbody = document.querySelector('#som-table tbody');
-    if (somTbody) {
-      somTbody.innerHTML = somData.map((s, i) => `<tr><td>${s.label}</td><td>${fmt(s.val, 0)}</td></tr>`).join('');
+  // Check if this bar is a trigger — start a trade simulation
+  const row = df[barIdx];
+  if (row && row.confirmed_entry && !APP.activeTrade) {
+    const trade = simulateTrade(barIdx);
+    if (trade) {
+      APP.activeTrade = { ...trade, barsHeld: 0 };
     }
   }
 
-  // Update status
-  document.getElementById('status-text').textContent =
-    `${APP.currentContractName} · Bar ${barIdx} / ${Math.max(0, APP.currentContractData.length - 1)}. ${APP.completedTrades.length} trades completed.`;
-}
-
-function kvRow(key, val, raw=false) {
-  const valHtml = raw ? val : `<span class="kv-val">${val}</span>`;
-  return `<div class="kv-row"><span class="kv-key">${key}</span>${valHtml}</div>`;
-}
-
-// ── Populate contract dropdown ────────────────────────────────────────────────
-function populateContracts() {
-  const sel = document.getElementById('contract-select');
-  sel.innerHTML = APP.metadata.contracts.map(c => `<option value="${c}">${c}</option>`).join('');
-  sel.addEventListener('change', loadContract);
-}
-
-async function loadContract() {
-  const contract = document.getElementById('contract-select').value;
-  try {
-    APP.currentContractData = await loadContractData(contract);
-    if (!APP.currentContractData || APP.currentContractData.length === 0) {
-      document.getElementById('status-text').textContent = 'Error: Contract data is empty';
-      return;
-    }
-    APP.currentContractName = contract;
-    APP.currentBarIdx = 0;
-    APP.completedTrades = [];
+  // Check if active trade should close
+  if (APP.activeTrade && barIdx >= APP.activeTrade.exitBar) {
+    APP.completedTrades.push({ ...APP.activeTrade });
     APP.activeTrade = null;
-    
-    // Find all triggers for this contract
-    const triggers = APP.metadata.tradeIndex.filter(t => t.contract === contract);
-    APP.allTriggers = triggers;
-    console.log(`Loaded contract: ${contract}, triggers: ${triggers.length}`);
-    
-    // Populate triggers list
-    const triggersList = document.getElementById('triggers-list');
-    if (!triggersList) {
-      console.error('triggers-list element not found!');
+    updateLedger();
+  }
+
+  // Build and render chart
+  const fig = buildFigure(barIdx);
+  if (!fig) return;
+
+  Plotly.react('chart', fig.traces, fig.layout, {
+    displayModeBar: true,
+    modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+    displaylogo: false,
+    responsive: true,
+  });
+
+  // Update chart title
+  document.getElementById('chart-title').textContent =
+    `${APP.contractName.replace(/_intraday.*/, '')} — bar ${barIdx} / ${df.length - 1}  ·  ${row ? row.time.replace('T', ' ') : ''}`;
+
+  // Update side panels
+  updateAgentA(barIdx, row);
+  updateAgentB(barIdx, row);
+  updateTradePanel(barIdx);
+
+  // Update z-vectors table
+  updateZTable(row);
+
+  // Update SOM table
+  updateSOMTable(row);
+
+  // Highlight active trigger
+  highlightActiveTrigger(barIdx);
+}
+
+// ── Update Agent A panel ──────────────────────────────────────────────────────
+function updateAgentA(barIdx, row) {
+  if (!row) return;
+  const panel = document.getElementById('agent-a-panel');
+  const dir = row.entry_direction > 0 ? '<span class="kv-val pos">LONG</span>'
+            : row.entry_direction < 0 ? '<span class="kv-val neg">SHORT</span>'
+            : '<span class="kv-val">—</span>';
+  panel.innerHTML =
+    kv('Bar', barIdx) +
+    kv('Time', row.time.replace('T', ' ')) +
+    kv('Close', fmt4(row.close)) +
+    kv('ATR', fmt4(row.atr)) +
+    kv('Fast signal', fmt0(row.fast_signal)) +
+    kv('Slow signal', fmt0(row.slow_signal)) +
+    kv('Confirmed entry', row.confirmed_entry ? '<span class="kv-val pos">YES</span>' : '<span class="kv-val">NO</span>', '') +
+    `<div class="kv-row"><span class="kv-key">Direction</span>${dir}</div>`;
+}
+
+// ── Update Agent B panel ──────────────────────────────────────────────────────
+function updateAgentB(barIdx, row) {
+  if (!row) return;
+  const panel = document.getElementById('agent-b-panel');
+  let decision = '—';
+  let decClass = '';
+
+  if (APP.activeTrade) {
+    const barsHeld = barIdx - APP.activeTrade.entryBar;
+    if (barsHeld < MIN_HOLD) {
+      decision = `HOLD (lock: ${MIN_HOLD - barsHeld} bars left)`;
+      decClass = 'pos';
+    } else if (barIdx >= APP.activeTrade.exitBar) {
+      decision = 'EXIT';
+      decClass = 'neg';
     } else {
-      const html = triggers.map((t, i) => 
-        `<div class="kv-row" style="cursor:pointer;padding:6px;border-radius:4px;background:var(--surface2);margin-bottom:4px;" onclick="jumpToTrigger(${i})">
-          <span class="kv-key">T${i+1}</span>
-          <span class="kv-val" style="font-size:11px;">${t.label}</span>
-        </div>`
-      ).join('');
-      triggersList.innerHTML = html;
-      console.log(`Populated ${triggers.length} triggers`);
+      decision = 'HOLD';
+      decClass = 'pos';
     }
-    document.getElementById('trigger-count').textContent = triggers.length;
-    
-    renderBar(0);
-  } catch(e) {
-    document.getElementById('status-text').textContent = 'Error: ' + e.message;
   }
+
+  panel.innerHTML =
+    kv('Decision', `<span class="kv-val ${decClass}">${decision}</span>`, '') +
+    kv('Regime valid', row.reg_valid ? '<span class="kv-val pos">YES</span>' : '<span class="kv-val neg">NO</span>', '') +
+    kv('Reg ID', fmt0(row.reg_id)) +
+    kv('Fmt ID', fmt0(row.fmt_id)) +
+    kv('Pos ID', fmt0(row.pos_id));
 }
 
-function jumpToTrigger(triggerIdx) {
-  if (triggerIdx < 0 || triggerIdx >= APP.allTriggers.length) return;
-  const trigger = APP.allTriggers[triggerIdx];
-  renderBar(trigger.localIdx);
-}
-
-// ── Playback controls ─────────────────────────────────────────────────────────
-function stopPlayback() {
-  APP.isPlaying = false;
-  if (APP.playTimer) { clearTimeout(APP.playTimer); APP.playTimer = null; }
-  document.getElementById('stop-btn').disabled = true;
-  document.getElementById('play-btn').disabled = false;
-  document.getElementById('play-all-btn').disabled = false;
-}
-
-function startPlay() {
-  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
-  stopPlayback();
-  APP.isPlaying = true;
-  document.getElementById('stop-btn').disabled = false;
-  document.getElementById('play-btn').disabled = true;
-  document.getElementById('play-all-btn').disabled = true;
-  
-  const nBars = APP.currentContractData.length;
-  const speed  = parseFloat(document.getElementById('speed-slider').value) * 1000;
-  let bar = APP.currentBarIdx;
-  
-  function tick() {
-    if (!APP.isPlaying || bar >= nBars) { stopPlayback(); return; }
-    
-    // Check if we hit a trigger
-    const trigger = APP.allTriggers.find(t => t.localIdx === bar);
-    if (trigger && APP.activeTrade === null) {
-      // Start a new trade
-      const trade = simulateTrade(APP.currentContractData, bar);
-      if (trade) {
-        APP.activeTrade = trade;
-      }
-    }
-    
-    // Check if active trade should close
-    if (APP.activeTrade && bar >= APP.activeTrade.exitBar) {
-      APP.completedTrades.push(APP.activeTrade);
-      updateLedger();
-      APP.activeTrade = null;
-    }
-    
-    renderBar(bar);
-    bar++;
-    APP.playTimer = setTimeout(tick, speed);
+// ── Update Active Trade panel ─────────────────────────────────────────────────
+function updateTradePanel(barIdx) {
+  const panel = document.getElementById('trade-panel');
+  if (!APP.activeTrade) {
+    panel.innerHTML = kv('Status', 'No active trade');
+    return;
   }
-  
-  tick();
-}
-function startPlayAll() {
-  if (!APP.currentContractData || APP.currentContractData.length === 0) return;
-  APP.completedTrades = [];
-  APP.activeTrade = null;
-  APP.currentBarIdx = 0;
-  startPlay();
+  const t = APP.activeTrade;
+  const df = APP.contractData;
+  const cur = df[barIdx];
+  const barsHeld = barIdx - t.entryBar;
+  const unreal = cur ? (cur.close - t.entryPrice) * t.entryDir / CENT : 0;
+  const dirLabel = t.entryDir > 0 ? '<span class="kv-val pos">LONG</span>' : '<span class="kv-val neg">SHORT</span>';
+  const pnlClass = unreal >= 0 ? 'pos' : 'neg';
+
+  panel.innerHTML =
+    `<div class="kv-row"><span class="kv-key">Direction</span>${dirLabel}</div>` +
+    kv('Entry bar', t.entryBar) +
+    kv('Entry price', fmt4(t.entryPrice)) +
+    kv('Bars held', barsHeld) +
+    kv('Forced exit @', t.exitBar) +
+    kv('Unrealized PnL', `<span class="kv-val ${pnlClass}">${fmt2(unreal)}¢</span>`, '');
 }
 
-// ── Update ledger ────────────────────────────────────────────────────────
+// ── Update z-vectors table ────────────────────────────────────────────────────
+function updateZTable(row) {
+  const tbody = document.querySelector('#z-table tbody');
+  if (!tbody || !row) return;
+  const rows = [];
+  for (let i = 0; i <= 31; i++) {
+    const key = `z${String(i).padStart(2, '0')}`;
+    const val = row[key];
+    const display = isNum(val) ? val.toFixed(6) : '<span style="color:var(--muted)">null</span>';
+    rows.push(`<tr><td style="color:var(--muted)">z${String(i).padStart(2,'0')}</td><td>${display}</td></tr>`);
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+// ── Update SOM table ──────────────────────────────────────────────────────────
+function updateSOMTable(row) {
+  const tbody = document.querySelector('#som-table tbody');
+  if (!tbody || !row) return;
+  tbody.innerHTML = [
+    ['Format SOM (fmt_id)', row.fmt_id],
+    ['Position SOM (pos_id)', row.pos_id],
+    ['Regime SOM (reg_id)', row.reg_id],
+  ].map(([label, val]) => {
+    const display = val !== undefined && val !== null && val !== -1
+      ? `<strong>${val}</strong>`
+      : '<span style="color:var(--muted)">—</span>';
+    return `<tr><td style="color:var(--muted)">${label}</td><td>${display}</td></tr>`;
+  }).join('');
+}
+
+// ── Update ledger ─────────────────────────────────────────────────────────────
 function updateLedger() {
   const tbody = document.querySelector('#ledger-table tbody');
-  tbody.innerHTML = APP.completedTrades.map((trade, ix) => {
-    const pc = trade.realizedPnlCents >= 0 ? 'pnl-pos' : 'pnl-neg';
-    const dir = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
+  tbody.innerHTML = APP.completedTrades.map((t, i) => {
+    const pc  = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+    const dir = t.entryDir > 0 ? 'LONG' : 'SHORT';
     return `<tr>
-      <td>${ix+1}</td>
-      <td>${trade.entryBar}</td>
-      <td>${trade.entryTime}</td>
-      <td>${trade.exitBar}</td>
-      <td>${trade.exitTime}</td>
+      <td>${i+1}</td>
+      <td>${t.entryBar}</td>
+      <td>${t.exitBar}</td>
       <td>${dir}</td>
-      <td class="${pc}">${fmt(trade.realizedPnlCents, 3)}</td>
-      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${trade.exitReason}">${trade.exitReason}</td>
+      <td class="${pc}">${fmt2(t.pnl)}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${t.exitReason}">${t.exitReason}</td>
     </tr>`;
   }).join('');
   const wrap = tbody.closest('.table-wrap');
   if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
 
-// ── Range slider live labels ──────────────────────────────────────────────────
-function bindSlider(id, labelId, suffix='') {
-  const el = document.getElementById(id);
-  const lb = document.getElementById(labelId);
-  el.addEventListener('input', () => { lb.textContent = el.value + suffix; });
+// ── Highlight active trigger in the list ──────────────────────────────────────
+function highlightActiveTrigger(barIdx) {
+  document.querySelectorAll('.trigger-item').forEach(el => el.classList.remove('active'));
+  // Find the trigger closest to current bar
+  let closest = -1, minDist = Infinity;
+  APP.allTriggers.forEach((t, i) => {
+    const d = Math.abs(t.localIdx - barIdx);
+    if (d < minDist) { minDist = d; closest = i; }
+  });
+  if (closest >= 0 && minDist <= 5) {
+    const el = document.getElementById(`trig-${closest}`);
+    if (el) el.classList.add('active');
+  }
+}
+
+// ── Playback controls ─────────────────────────────────────────────────────────
+function startPlay() {
+  if (APP.isPlaying) return;
+  APP.isPlaying = true;
+  APP.playAllMode = false;
+
+  function tick() {
+    if (!APP.isPlaying) return;
+    const next = APP.currentBarIdx + 1;
+    if (next >= APP.contractData.length) {
+      stopPlayback();
+      return;
+    }
+    renderBar(next);
+    const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
+    APP.playTimer = setTimeout(tick, speed);
+  }
+  const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
+  APP.playTimer = setTimeout(tick, speed);
+}
+
+function startPlayAll() {
+  stopPlayback();
+  if (APP.allTriggers.length === 0) return;
+  APP.isPlaying  = true;
+  APP.playAllMode = true;
+  APP.playAllIdx  = 0;
+  APP.completedTrades = [];
+  APP.activeTrade = null;
+  APP.currentBarIdx = 0;
+  updateLedger();
+  jumpToTrigger(0);
+  playAllNext();
+}
+
+function playAllNext() {
+  if (!APP.isPlaying || !APP.playAllMode) return;
+  if (APP.playAllIdx >= APP.allTriggers.length) {
+    stopPlayback();
+    return;
+  }
+
+  const trig = APP.allTriggers[APP.playAllIdx];
+  const startBar = Math.max(0, trig.localIdx - 5);
+
+  // Play from startBar through the trade
+  const trade = simulateTrade(trig.localIdx);
+  const endBar = trade ? trade.exitBar + 3 : trig.localIdx + MAX_HOLD;
+
+  let bar = startBar;
+  function tick() {
+    if (!APP.isPlaying) return;
+    if (bar > endBar || bar >= APP.contractData.length) {
+      APP.playAllIdx++;
+      const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
+      APP.playTimer = setTimeout(playAllNext, speed * 3);
+      return;
+    }
+    renderBar(bar);
+    bar++;
+    const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
+    APP.playTimer = setTimeout(tick, speed);
+  }
+  tick();
+}
+
+function stopPlayback() {
+  APP.isPlaying   = false;
+  APP.playAllMode = false;
+  if (APP.playTimer) { clearTimeout(APP.playTimer); APP.playTimer = null; }
 }
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function init() {
-  bindSlider('speed-slider',    'speed-label',    's');
-  bindSlider('lookback-slider', 'lookback-label', '');
-  bindSlider('lookahead-slider','lookahead-label','');
-  
+  // Slider live labels
+  document.getElementById('speed-slider').addEventListener('input', e => {
+    document.getElementById('speed-label').textContent = parseFloat(e.target.value).toFixed(2);
+  });
+  document.getElementById('lookback-slider').addEventListener('input', e => {
+    document.getElementById('lookback-label').textContent = e.target.value;
+    renderBar(APP.currentBarIdx);
+  });
   document.getElementById('bar-slider').addEventListener('input', e => {
-    document.getElementById('bar-label').textContent = parseInt(e.target.value);
-    renderBar(parseInt(e.target.value));
+    const v = parseInt(e.target.value);
+    document.getElementById('bar-label').textContent = v;
+    renderBar(v);
   });
 
-  document.getElementById('render-btn').addEventListener('click', () => {
-    renderBar(parseInt(document.getElementById('bar-slider').value));
-  });
+  // Buttons
   document.getElementById('play-btn').addEventListener('click', startPlay);
   document.getElementById('play-all-btn').addEventListener('click', startPlayAll);
   document.getElementById('stop-btn').addEventListener('click', stopPlayback);
+  document.getElementById('contract-select').addEventListener('change', loadContract);
 
-  document.getElementById('status-text').textContent = 'Loading dataset metadata…';
+  // Load metadata
+  document.getElementById('status-text').textContent = 'Loading metadata…';
   try {
-    const resp = await fetch('data/metadata.json');
-    if (!resp.ok) throw new Error('Metadata not found');
-    APP.metadata = await resp.json();
+    APP.metadata = await loadMetadata();
   } catch(e) {
-    document.getElementById('status-text').textContent = 'Failed to load metadata: ' + e.message;
-    document.getElementById('loading').style.display = 'none';
+    document.getElementById('status-text').textContent = 'Failed: ' + e.message;
     return;
   }
 
   populateContracts();
-  console.log(`Metadata loaded: ${APP.metadata.contracts.length} contracts, ${APP.metadata.tradeIndex.length} triggers`);
-  if (APP.metadata.contracts.length) {
-    console.log(`Loading first contract: ${APP.metadata.contracts[0]}`);
-    loadContract();
-  }
-
-  document.getElementById('loading').style.display = 'none';
-  const totalTriggers = APP.metadata.tradeIndex.length;
   document.getElementById('status-text').textContent =
-    `Dataset loaded: ${APP.metadata.contracts.length} contracts · ${totalTriggers} triggers`;
+    `${APP.metadata.contracts.length} contracts · ${APP.metadata.tradeIndex.length} triggers loaded`;
+
+  // Load first contract
+  await loadContract();
 }
 
 init();
