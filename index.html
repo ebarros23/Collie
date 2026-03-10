@@ -621,28 +621,31 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function sign(v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
 function isFiniteNum(v) { return typeof v === 'number' && isFinite(v); }
 function fmt(v, d=4) { return isFiniteNum(v) ? v.toFixed(d) : '—'; }
-
-// ── Load contract data ───────────────────────────────────────────────────────
+// ── Load contract data ───────────────────────────────────────────────
 async function loadContractData(contract) {
   try {
     const resp = await fetch(`data/${contract}.json`);
     if (!resp.ok) throw new Error(`Failed to load ${contract}`);
     const rows = await resp.json();
-    return rows.map(r => ({
-      ...r,
-      bar_idx:         parseInt(r.bar_idx)   || 0,
-      open:            parseFloat(r.open)    || 0,
-      high:            parseFloat(r.high)    || 0,
-      low:             parseFloat(r.low)     || 0,
-      close:           parseFloat(r.close)   || 0,
-      atr:             parseFloat(r.atr)     || 0,
-      ema6:            parseFloat(r.ema6)    || null,
-      sma12:           parseFloat(r.sma12)   || null,
-      sma24:           parseFloat(r.sma24)   || null,
-      confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
-      entry_direction: parseFloat(r.entry_direction) || 0,
-      fast_signal:     parseFloat(r.fast_signal)     || 0,
-    }));
+    return rows.map(r => {
+      const v = {
+        ...r,
+        time:            r.time || '',
+        bar_idx:         parseInt(r.bar_idx)   || 0,
+        open:            parseFloat(r.open)    || 0,
+        high:            parseFloat(r.high)    || 0,
+        low:             parseFloat(r.low)     || 0,
+        close:           parseFloat(r.close)   || 0,
+        atr:             isFiniteNum(parseFloat(r.atr)) ? parseFloat(r.atr) : null,
+        ema6:            isFiniteNum(parseFloat(r.ema6)) ? parseFloat(r.ema6) : null,
+        sma12:           isFiniteNum(parseFloat(r.sma12)) ? parseFloat(r.sma12) : null,
+        sma24:           isFiniteNum(parseFloat(r.sma24)) ? parseFloat(r.sma24) : null,
+        confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
+        entry_direction: parseFloat(r.entry_direction) || 0,
+        fast_signal:     parseFloat(r.fast_signal)     || 0,
+      };
+      return v;
+    });
   } catch(e) {
     console.error(`Error loading ${contract}:`, e);
     return [];
