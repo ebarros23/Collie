@@ -520,7 +520,14 @@ function jumpToTrigger(idx) {
   const el = document.getElementById(`trig-${idx}`);
   if (el) { el.classList.add('active'); el.scrollIntoView({ block: 'nearest' }); }
 
-  const bar = APP.allTriggers[idx].localIdx;
+  const triggerBar = APP.allTriggers[idx].localIdx;
+  // Find the matching trade to know the exit bar
+  const trade = APP.allTrades.find(t => t.triggerBar === triggerBar);
+  // Center the view: show from triggerBar-10 to exitBar+5, but at least triggerBar itself
+  const lookback = parseInt(document.getElementById('lookback-slider').value) || 60;
+  // Set currentBarIdx so that the trigger bar is visible with some context before and after
+  const viewBar = trade ? Math.min(trade.exitBar + 5, APP.contractData.length - 1) : triggerBar + lookback;
+  const bar = Math.min(viewBar, APP.contractData.length - 1);
   document.getElementById('bar-slider').value = bar;
   document.getElementById('bar-label').textContent = bar;
   renderBar(bar);
@@ -635,16 +642,21 @@ function buildFigure(barIdx) {
   const exitX=[], exitY=[], exitText=[];
   const holdX=[], holdY=[], holdText=[];
 
-  // Use ALL pre-simulated trades — show markers for any trade that overlaps the visible window
-  const allTrades = APP.allTrades.filter(t => t.exitBar >= startIdx && t.entryBar <= endIdx);
+  // Use ALL pre-simulated trades — show markers for any trade whose trigger, entry, hold, or exit overlaps the visible window
+  const allTrades = APP.allTrades.filter(t =>
+    (t.triggerBar >= startIdx && t.triggerBar <= endIdx) ||
+    (t.exitBar    >= startIdx && t.exitBar    <= endIdx) ||
+    (t.entryBar   >= startIdx && t.entryBar   <= endIdx) ||
+    (t.entryBar   <= startIdx && t.exitBar    >= endIdx)
+  );
 
   for (const trade of allTrades) {
-    // Entry marker — show if within visible window
-    if (trade.entryBar >= startIdx && trade.entryBar <= endIdx) {
-      const b = df[trade.entryBar];
+    // Trigger bar marker (the confirmed_entry bar itself)
+    if (trade.triggerBar >= startIdx && trade.triggerBar <= endIdx) {
+      const b = df[trade.triggerBar];
       if (b && b.time) {
         entryX.push(b.time);
-        entryY.push(trade.entryPrice);
+        entryY.push(b.close);
         entryText.push(trade.entryDir > 0 ? 'LONG' : 'SHORT');
       }
     }
@@ -659,12 +671,12 @@ function buildFigure(barIdx) {
       }
     }
 
-    // H markers for each hold bar within visible window
+    // H markers for each hold bar within visible window (from entryBar to exitBar)
     const holdEnd = trade.exitBar !== undefined ? trade.exitBar : barIdx;
-    for (let i = trade.entryBar + 1; i < holdEnd; i++) {
+    for (let i = trade.entryBar; i < holdEnd; i++) {
       if (i >= startIdx && i <= endIdx && df[i] && df[i].time) {
         holdX.push(df[i].time);
-        holdY.push(df[i].high * 1.0015);  // slightly above candle
+        holdY.push(df[i].high * 1.002);
         holdText.push('H');
       }
     }
