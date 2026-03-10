@@ -979,15 +979,22 @@ async function loadContract() {
     // Find all triggers for this contract
     const triggers = APP.metadata.tradeIndex.filter(t => t.contract === contract);
     APP.allTriggers = triggers;
+    console.log(`Loaded contract: ${contract}, triggers: ${triggers.length}`);
     
     // Populate triggers list
     const triggersList = document.getElementById('triggers-list');
-    triggersList.innerHTML = triggers.map((t, i) => 
-      `<div class="kv-row" style="cursor:pointer;padding:6px;border-radius:4px;background:var(--surface2);margin-bottom:4px;" onclick="jumpToTrigger(${i})">
-        <span class="kv-key">T${i+1}</span>
-        <span class="kv-val" style="font-size:11px;">${t.label}</span>
-      </div>`
-    ).join('');
+    if (!triggersList) {
+      console.error('triggers-list element not found!');
+    } else {
+      const html = triggers.map((t, i) => 
+        `<div class="kv-row" style="cursor:pointer;padding:6px;border-radius:4px;background:var(--surface2);margin-bottom:4px;" onclick="jumpToTrigger(${i})">
+          <span class="kv-key">T${i+1}</span>
+          <span class="kv-val" style="font-size:11px;">${t.label}</span>
+        </div>`
+      ).join('');
+      triggersList.innerHTML = html;
+      console.log(`Populated ${triggers.length} triggers`);
+    }
     document.getElementById('trigger-count').textContent = triggers.length;
     
     renderBar(0);
@@ -1116,7 +1123,9 @@ async function init() {
   }
 
   populateContracts();
+  console.log(`Metadata loaded: ${APP.metadata.contracts.length} contracts, ${APP.metadata.tradeIndex.length} triggers`);
   if (APP.metadata.contracts.length) {
+    console.log(`Loading first contract: ${APP.metadata.contracts[0]}`);
     loadContract();
   }
 
