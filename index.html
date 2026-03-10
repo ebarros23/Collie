@@ -276,6 +276,8 @@
 
     .info-box-body {
       padding: 12px 14px;
+      max-height: 200px;
+      overflow-y: auto;
     }
     .kv-row {
       display: flex;
@@ -440,7 +442,7 @@
   <!-- ── Status bar ─────────────────────────────────────────────────────── -->
   <div id="status-bar">
     <div class="dot"></div>
-    <span id="status-text">Select a contract and trigger to begin playback.</span>
+    <span id="status-text">Loading dataset metadata…</span>
   </div>
 
   <!-- ── Controls ───────────────────────────────────────────────────────── -->
@@ -624,8 +626,8 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   TFL-Collie Dashboard — Pure client-side simulation
-   Mirrors all chart rules from tfl_collie_playback_full_contract_realistic.py
+   TFL-Collie Dashboard — Pure client-side simulation with dynamic data loading
+   Supports 100+ contracts with efficient lazy loading from data/ folder
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // ── Constants (mirrored from Python) ────────────────────────────────────────
@@ -649,18 +651,16 @@ const SCALAR_NAMES = [
 
 // ── App state ────────────────────────────────────────────────────────────────
 let APP = {
-  df: null,           // full dataset rows
-  byContract: {},     // { contractName: [rows] }
-  contracts: [],
-  tradeIndex: [],     // [{contract, triggerBar, localIdx, entryDirection, time, regId, label}]
-  blockRegs: new Set(),
-  allowRegs: new Set(),
+  metadata: null,        // {contracts: [], tradeIndex: []}
+  byContractCache: {},   // {contractName: [rows]} — lazy loaded
   currentTrade: null,
   currentContractDf: null,
   stepIdx: 0,
   isPlaying: false,
   playTimer: null,
   completedLabels: [],
+  blockRegs: new Set(),
+  allowRegs: new Set(),
 };
 
 // ── Utility ──────────────────────────────────────────────────────────────────
@@ -669,39 +669,53 @@ function sign(v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
 function isFiniteNum(v) { return typeof v === 'number' && isFinite(v); }
 function fmt(v, d=4) { return isFiniteNum(v) ? v.toFixed(d) : '—'; }
 
-// ── CSV parser (robust, handles quoted fields) ────────────────────────────────
-function parseCSV(text) {
-  const lines = text.split('\n');
-  const headers = splitCSVLine(lines[0]);
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const vals = splitCSVLine(line);
-    const row = {};
-    headers.forEach((h, idx) => { row[h.trim()] = vals[idx] !== undefined ? vals[idx].trim() : ''; });
-    rows.push(row);
+// ── Load contract data from data/ folder (lazy loading) ─────────────────────
+async function loadContractData(contract) {
+  if (APP.byContractCache[contract]) {
+    return APP.byContractCache[contract];
   }
-  return rows;
-}
-
-function splitCSVLine(line) {
-  const result = [];
-  let cur = '', inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') { inQ = !inQ; }
-    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
-    else { cur += c; }
+  try {
+    const resp = await fetch(`data/${contract}.json`);
+    if (!resp.ok) throw new Error(`Failed to load ${contract}`);
+    const rows = await resp.json();
+    // Process rows
+    const processed = rows.map(r => ({
+      ...r,
+      bar_idx:         parseInt(r.bar_idx)   || 0,
+      open:            parseFloat(r.open)    || 0,
+      high:            parseFloat(r.high)    || 0,
+      low:             parseFloat(r.low)     || 0,
+      close:           parseFloat(r.close)   || 0,
+      atr:             parseFloat(r.atr)     || 0,
+      ema6:            parseFloat(r.ema6)    || null,
+      sma12:           parseFloat(r.sma12)   || null,
+      sma24:           parseFloat(r.sma24)   || null,
+      confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
+      entry_direction: parseFloat(r.entry_direction) || 0,
+      fast_signal:     parseFloat(r.fast_signal)     || 0,
+      fmt_id:          parseInt(r.fmt_id)    ?? -1,
+      pos_id:          parseInt(r.pos_id)    ?? -1,
+      reg_id:          parseInt(r.reg_id)    ?? -1,
+      ...Object.fromEntries(
+        Array.from({length:32},(_,d)=>{
+          const k=`z${String(d).padStart(2,'0')}`;
+          return [k, parseFloat(r[k]) || 0];
+        })
+      ),
+    }));
+    APP.byContractCache[contract] = processed;
+    return processed;
+  } catch(e) {
+    console.error(`Error loading ${contract}:`, e);
+    return [];
   }
-  result.push(cur);
-  return result;
 }
 
 // ── Regime filter (mirrors compute_regime_filter) ────────────────────────────
-function computeRegimeFilter(byContract) {
+async function computeRegimeFilter() {
   const regRewards = {};
-  for (const [, grp] of Object.entries(byContract)) {
+  for (const contract of APP.metadata.contracts) {
+    const grp = await loadContractData(contract);
     const sorted = [...grp].sort((a,b) => a.bar_idx - b.bar_idx);
     const closes = sorted.map(r => r.close);
     const regs   = sorted.map(r => r.reg_id);
@@ -734,25 +748,6 @@ function computeRegimeFilter(byContract) {
     allowRegs: new Set(scores.slice(0, topK).map(s => s.reg)),
     blockRegs: new Set(scores.slice(-botK).map(s => s.reg)),
   };
-}
-
-// ── Build trade index (mirrors build_trade_index) ────────────────────────────
-function buildTradeIndex(byContract, blockRegs) {
-  const rows = [];
-  for (const [contract, grp] of Object.entries(byContract)) {
-    const sorted = [...grp].sort((a,b) => a.bar_idx - b.bar_idx);
-    for (let localIdx = 0; localIdx < sorted.length; localIdx++) {
-      const row = sorted[localIdx];
-      if (!row.confirmed_entry) continue;
-      if (localIdx + 1 >= sorted.length) continue;
-      const reg = row.reg_id;
-      const side = row.entry_direction > 0 ? 'LONG' : 'SHORT';
-      const label = `bar=${row.bar_idx} | ${row.time} | ${side} | reg=${reg}`;
-      rows.push({ contract, triggerBar: row.bar_idx, localIdx, entryDirection: row.entry_direction, time: row.time, regId: reg, label });
-    }
-  }
-  rows.sort((a,b) => a.contract.localeCompare(b.contract) || a.triggerBar - b.triggerBar);
-  return rows;
 }
 
 // ── Make state B scalars (mirrors make_state_B) ──────────────────────────────
@@ -795,7 +790,6 @@ function makeStateB(contractDf, i, position, barsHeld, entryPx, tradeDir,
     forcedEta,
     blockedFlag,
   ].map(v => isFiniteNum(v) ? v : 0);
-  // latent z (zeros if not in dataset)
   const z = Array.from({length:32}, (_,d) => {
     const key = `z${String(d).padStart(2,'0')}`;
     const val = row[key];
@@ -933,7 +927,7 @@ function progressiveSeries(df, key, visEnd, startIdx) {
   return out;
 }
 
-// ── Build Plotly figure (mirrors make_rolling_figure) ────────────────────────
+// ── Build Plotly figure (mirrors make_rolling_figure) ──────────────────────
 function buildFigure(trade, stepIdx, historicalTrades=[]) {
   const contractDf = trade.sortedDf;
   const dec = trade.decisions[stepIdx];
@@ -946,7 +940,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
   const shownDecisions = trade.decisions.slice(0, stepIdx + 1);
   const traces = [];
 
-  // ── Candlestick (only visible bars) ──────────────────────────────────────
   traces.push({
     type: 'candlestick',
     x:     visibleDf.map(r => r.time),
@@ -960,7 +953,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     whiskerwidth: 0.3,
   });
 
-  // ── Moving averages (progressive reveal — same rule as Python) ────────────
   const wTimes = windowDf.map(r => r.time);
   traces.push({
     type: 'scatter', mode: 'lines',
@@ -987,7 +979,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     connectgaps: false,
   });
 
-  // ── Agent A entry marker ──────────────────────────────────────────────────
   if (startIdx <= trade.entryBar && trade.entryBar <= currentBarIdx) {
     const entryRow = contractDf[trade.entryBar];
     traces.push({
@@ -1005,7 +996,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     });
   }
 
-  // ── Historical trade markers ──────────────────────────────────────────────
   const pastAx=[], pastAy=[], pastBx=[], pastBy=[], pastBtext=[];
   for (const pt of historicalTrades) {
     if (startIdx <= pt.entryBar && pt.entryBar <= endIdx) {
@@ -1041,7 +1031,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     });
   }
 
-  // ── Agent B decision markers (shown decisions only) ───────────────────────
   const bx=[], by=[], btext=[], bcolors=[];
   for (const d of shownDecisions) {
     if (startIdx <= d.barIdx && d.barIdx <= currentBarIdx) {
@@ -1062,7 +1051,6 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     });
   }
 
-  // ── Layout ────────────────────────────────────────────────────────────────
   const entryTs  = contractDf[trade.entryBar].time;
   const exitTs   = contractDf[trade.exitBar].time;
   const currentTs = contractDf[currentBarIdx].time;
@@ -1126,7 +1114,6 @@ function renderStep(stepIdx, historicalTrades=[]) {
   APP.stepIdx = stepIdx;
   const dec = trade.decisions[stepIdx];
 
-  // Update slider
   const slider = document.getElementById('step-slider');
   slider.max = Math.max(nSteps - 1, 0);
   slider.value = stepIdx;
@@ -1135,14 +1122,11 @@ function renderStep(stepIdx, historicalTrades=[]) {
   document.getElementById('step-progress').style.width = pct + '%';
   document.getElementById('candle-counter').textContent = `${stepIdx+1} / ${nSteps}`;
 
-  // Chart
   const { traces, layout } = buildFigure(trade, stepIdx, historicalTrades);
   Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
 
-  // Chart badge
   document.getElementById('chart-badge').textContent = trade.contract;
 
-  // Agent A panel
   const dirClass = trade.entryDirection > 0 ? 'long' : 'short';
   const dirText  = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
   document.getElementById('agent-a-body').innerHTML = kvRow('Trigger', trade.triggerLabel)
@@ -1152,7 +1136,6 @@ function renderStep(stepIdx, historicalTrades=[]) {
     + kvRow('Blocked regime', String(trade.blockedRegime))
     + kvRow('fmt / pos / reg', `${trade.fmtId} / ${trade.posId} / ${trade.regId}`);
 
-  // Agent B panel
   const actionClass = dec.action === 'HOLD' ? 'hold' : 'exit';
   const pnlClass    = dec.unrealizedPnlCents >= 0 ? 'pos' : 'neg';
   document.getElementById('agent-b-body').innerHTML =
@@ -1166,7 +1149,6 @@ function renderStep(stepIdx, historicalTrades=[]) {
     + kvRow('Unrealized PnL', `<span class="kv-val ${pnlClass}">${fmt(dec.unrealizedPnlCents, 3)} ¢</span>`, true)
     + `<div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val reason-text" title="${dec.reason}">${dec.reason}</span></div>`;
 
-  // Summary panel
   const realClass = trade.realizedPnlCents >= 0 ? 'pos' : 'neg';
   document.getElementById('summary-body').innerHTML =
     kvRow('Contract', trade.contract)
@@ -1174,19 +1156,15 @@ function renderStep(stepIdx, historicalTrades=[]) {
     + kvRow('Realized PnL', `<span class="kv-val ${realClass}">${fmt(trade.realizedPnlCents, 3)} ¢</span>`, true)
     + kvRow('Model', 'Heuristic demo mode');
 
-  // Status
   document.getElementById('status-text').textContent =
     `${trade.triggerLabel} — candle ${stepIdx+1}/${nSteps}. Window rolls forward without compressing candles.`;
 
-  // Scalar state table
   renderTable('state-table', ['Feature','Value'],
     dec.sc.map((v,i) => [SCALAR_NAMES[i] || `sc${i}`, fmt(v,6)]));
 
-  // Z table
   renderTable('z-table', ['Dim','Value'],
     dec.z.map((v,d) => [`z${String(d).padStart(2,'0')}`, fmt(v,6)]));
 
-  // Ledger
   const shownDecs = trade.decisions.slice(0, stepIdx + 1);
   renderLedger(shownDecs);
 }
@@ -1219,7 +1197,6 @@ function renderLedger(decisions) {
       <td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.reason}">${d.reason}</td>
     </tr>`;
   }).join('');
-  // Auto-scroll ledger to bottom
   const wrap = tbody.closest('.table-wrap');
   if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
@@ -1227,7 +1204,7 @@ function renderLedger(decisions) {
 // ── Populate contract dropdown ────────────────────────────────────────────────
 function populateContracts() {
   const sel = document.getElementById('contract-select');
-  sel.innerHTML = APP.contracts.map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.innerHTML = APP.metadata.contracts.map(c => `<option value="${c}">${c}</option>`).join('');
   sel.addEventListener('change', () => {
     populateTriggers(sel.value);
     loadTrigger();
@@ -1236,7 +1213,7 @@ function populateContracts() {
 
 function populateTriggers(contract) {
   const sel = document.getElementById('trigger-select');
-  const choices = APP.tradeIndex.filter(t => t.contract === contract);
+  const choices = APP.metadata.tradeIndex.filter(t => t.contract === contract);
   sel.innerHTML = choices.length
     ? choices.map(t => `<option value="${t.label}">${t.label}</option>`).join('')
     : '<option>No trades found</option>';
@@ -1244,14 +1221,20 @@ function populateTriggers(contract) {
   sel.addEventListener('change', loadTrigger);
 }
 
-function loadTrigger() {
+async function loadTrigger() {
   const contract = document.getElementById('contract-select').value;
   const label    = document.getElementById('trigger-select').value;
-  const contractDf = APP.byContract[contract];
-  if (!contractDf) return;
-  const entry = APP.tradeIndex.find(t => t.contract === contract && t.label === label);
-  if (!entry) return;
   try {
+    const contractDf = await loadContractData(contract);
+    if (!contractDf.length) {
+      document.getElementById('status-text').textContent = 'Error: Contract data is empty';
+      return;
+    }
+    const entry = APP.metadata.tradeIndex.find(t => t.contract === contract && t.label === label);
+    if (!entry) {
+      document.getElementById('status-text').textContent = 'Error: Trigger not found';
+      return;
+    }
     APP.currentTrade = simulateTrade(contractDf, entry.localIdx, APP.blockRegs);
     APP.currentContractDf = contractDf;
     APP.stepIdx = 0;
@@ -1290,9 +1273,9 @@ function startPlayOne() {
   tick();
 }
 
-function startPlayAll() {
+async function startPlayAll() {
   const contract = document.getElementById('contract-select').value;
-  const choices  = APP.tradeIndex.filter(t => t.contract === contract);
+  const choices  = APP.metadata.tradeIndex.filter(t => t.contract === contract);
   if (!choices.length) return;
   stopPlayback();
   APP.isPlaying = true;
@@ -1302,12 +1285,13 @@ function startPlayAll() {
   APP.completedLabels = [];
   const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
   let ci = 0, step = 0;
-  function nextTrade() {
+  async function nextTrade() {
     if (!APP.isPlaying || ci >= choices.length) { stopPlayback(); return; }
     const entry = choices[ci];
     document.getElementById('trigger-select').value = entry.label;
     try {
-      APP.currentTrade = simulateTrade(APP.byContract[contract], entry.localIdx, APP.blockRegs);
+      const contractDf = await loadContractData(contract);
+      APP.currentTrade = simulateTrade(contractDf, entry.localIdx, APP.blockRegs);
     } catch(e) { ci++; nextTrade(); return; }
     step = 0;
     tick();
@@ -1321,12 +1305,7 @@ function startPlayAll() {
       nextTrade();
       return;
     }
-    const histTrades = APP.completedLabels.map(lbl => {
-      const e = APP.tradeIndex.find(t => t.contract === contract && t.label === lbl);
-      if (!e) return null;
-      try { return simulateTrade(APP.byContract[contract], e.localIdx, APP.blockRegs); } catch { return null; }
-    }).filter(Boolean);
-    renderStep(step, histTrades);
+    renderStep(step);
     step++;
     APP.playTimer = setTimeout(tick, speed);
   }
@@ -1340,103 +1319,8 @@ function bindSlider(id, labelId, suffix='') {
   el.addEventListener('input', () => { lb.textContent = el.value + suffix; });
 }
 
-// ── Data loading ──────────────────────────────────────────────────────────────
-async function loadData() {
-  // Try to load the parquet/csv dataset from the repo
-  // Since this is a static page, we load a pre-generated JSON dataset
-  // The dataset is embedded as a JSON file generated from the parquet
-  try {
-    const resp = await fetch('tfl_ng_dataset.json');
-    if (!resp.ok) throw new Error('Dataset not found');
-    const data = await resp.json();
-    return data;
-  } catch {
-    // Fallback: generate synthetic demo data
-    return generateDemoData();
-  }
-}
-
-function generateDemoData() {
-  // Generate realistic synthetic natural gas price data for demo
-  const contracts = ['NGF25', 'NGG25', 'NGH25', 'NGJ25'];
-  const rows = [];
-  for (const contract of contracts) {
-    let price = 2.5 + Math.random() * 0.5;
-    let time = new Date('2024-01-02T09:00:00Z');
-    const nBars = 300;
-    let ema6 = price, sma12 = price, sma24 = price;
-    const prices6=[], prices12=[], prices24=[];
-    for (let i = 0; i < nBars; i++) {
-      const atr = 0.015 + Math.random() * 0.01;
-      const open = price;
-      const change = (Math.random() - 0.49) * atr * 2;
-      price = Math.max(1.5, price + change);
-      const high  = Math.max(open, price) + Math.random() * atr * 0.5;
-      const low   = Math.min(open, price) - Math.random() * atr * 0.5;
-      prices6.push(price); prices12.push(price); prices24.push(price);
-      if (prices6.length > 6)  prices6.shift();
-      if (prices12.length > 12) prices12.shift();
-      if (prices24.length > 24) prices24.shift();
-      ema6  = prices6.reduce((a,b)=>a+b,0)/prices6.length;
-      sma12 = prices12.reduce((a,b)=>a+b,0)/prices12.length;
-      sma24 = prices24.reduce((a,b)=>a+b,0)/prices24.length;
-      const trend = ema6 > sma24 ? 1 : -1;
-      const confirmed = i > 24 && Math.random() < 0.07;
-      const fastSignal = Math.random() < 0.1 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-      // latent z dims
-      const zDims = {};
-      for (let d = 0; d < 32; d++) {
-        zDims[`z${String(d).padStart(2,'0')}`] = (Math.random() - 0.5) * 2;
-      }
-      rows.push({
-        contract, bar_idx: i,
-        time: time.toISOString().replace('T',' ').replace('.000Z',''),
-        open, high, low, close: price,
-        atr, ema6, sma12, sma24,
-        confirmed_entry: confirmed,
-        entry_direction: confirmed ? trend : 0,
-        fast_signal: fastSignal,
-        fmt_id: Math.floor(Math.random() * 400),
-        pos_id: Math.floor(Math.random() * 256),
-        reg_id: Math.floor(Math.random() * 144),
-        ...zDims,
-      });
-      time = new Date(time.getTime() + 60 * 60 * 1000); // +1 hour
-    }
-  }
-  return rows;
-}
-
-function processRows(rawRows) {
-  return rawRows.map(r => ({
-    ...r,
-    bar_idx:         parseInt(r.bar_idx)   || 0,
-    open:            parseFloat(r.open)    || 0,
-    high:            parseFloat(r.high)    || 0,
-    low:             parseFloat(r.low)     || 0,
-    close:           parseFloat(r.close)   || 0,
-    atr:             parseFloat(r.atr)     || 0,
-    ema6:            parseFloat(r.ema6)    || null,
-    sma12:           parseFloat(r.sma12)   || null,
-    sma24:           parseFloat(r.sma24)   || null,
-    confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
-    entry_direction: parseFloat(r.entry_direction) || 0,
-    fast_signal:     parseFloat(r.fast_signal)     || 0,
-    fmt_id:          parseInt(r.fmt_id)    ?? -1,
-    pos_id:          parseInt(r.pos_id)    ?? -1,
-    reg_id:          parseInt(r.reg_id)    ?? -1,
-    ...Object.fromEntries(
-      Array.from({length:32},(_,d)=>{
-        const k=`z${String(d).padStart(2,'0')}`;
-        return [k, parseFloat(r[k]) || 0];
-      })
-    ),
-  }));
-}
-
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 async function init() {
-  // Bind range sliders
   bindSlider('speed-slider',    'speed-label',    's');
   bindSlider('lookback-slider', 'lookback-label', '');
   bindSlider('lookahead-slider','lookahead-label','');
@@ -1445,7 +1329,6 @@ async function init() {
     renderStep(parseInt(e.target.value));
   });
 
-  // Buttons
   document.getElementById('render-btn').addEventListener('click', () => {
     renderStep(parseInt(document.getElementById('step-slider').value));
   });
@@ -1453,49 +1336,33 @@ async function init() {
   document.getElementById('play-all-btn').addEventListener('click', startPlayAll);
   document.getElementById('stop-btn').addEventListener('click', stopPlayback);
 
-  // Load data
-  document.getElementById('status-text').textContent = 'Loading dataset…';
-  let rawRows;
+  document.getElementById('status-text').textContent = 'Loading dataset metadata…';
   try {
-    rawRows = await loadData();
+    const resp = await fetch('data/metadata.json');
+    if (!resp.ok) throw new Error('Metadata not found');
+    APP.metadata = await resp.json();
   } catch(e) {
-    document.getElementById('status-text').textContent = 'Failed to load dataset: ' + e.message;
+    document.getElementById('status-text').textContent = 'Failed to load metadata: ' + e.message;
     document.getElementById('loading').style.display = 'none';
     return;
   }
 
-  const rows = processRows(rawRows);
-  APP.df = rows;
-
-  // Group by contract
-  for (const row of rows) {
-    if (!APP.byContract[row.contract]) APP.byContract[row.contract] = [];
-    APP.byContract[row.contract].push(row);
-  }
-  // Sort each contract by bar_idx
-  for (const k of Object.keys(APP.byContract)) {
-    APP.byContract[k].sort((a,b) => a.bar_idx - b.bar_idx);
-  }
-  APP.contracts = Object.keys(APP.byContract).sort();
-
-  // Regime filter
-  const { allowRegs, blockRegs } = computeRegimeFilter(APP.byContract);
+  // Compute regime filter
+  document.getElementById('status-text').textContent = 'Computing regime filter…';
+  const { allowRegs, blockRegs } = await computeRegimeFilter();
   APP.allowRegs = allowRegs;
   APP.blockRegs = blockRegs;
 
-  // Trade index
-  APP.tradeIndex = buildTradeIndex(APP.byContract, APP.blockRegs);
-
-  // Populate UI
   populateContracts();
-  if (APP.contracts.length) {
-    populateTriggers(APP.contracts[0]);
+  if (APP.metadata.contracts.length) {
+    populateTriggers(APP.metadata.contracts[0]);
     loadTrigger();
   }
 
   document.getElementById('loading').style.display = 'none';
+  const totalRows = APP.metadata.tradeIndex.length;
   document.getElementById('status-text').textContent =
-    `Dataset loaded: ${rows.length.toLocaleString()} bars · ${APP.contracts.length} contracts · ${APP.tradeIndex.length} triggers`;
+    `Dataset loaded: ${APP.metadata.contracts.length} contracts · ${totalRows} triggers`;
 }
 
 init();
