@@ -695,8 +695,8 @@ function buildFigure(barIdx) {
       x: entryX, y: entryY, text: entryText,
       textposition: 'top center',
       name: 'Trigger (Entry)',
-      marker: { symbol: 'triangle-up', size: 16, color: '#3fb950', line: { color: '#fff', width: 1.5 } },
-      textfont: { color: '#3fb950', size: 11, family: 'monospace', weight: 'bold' },
+      marker: { symbol: 'triangle-up', size: 18, color: '#3fb950', line: { color: '#ffffff', width: 2 } },
+      textfont: { color: '#ffffff', size: 13, family: 'monospace' },
     });
   }
   if (exitX.length) {
@@ -705,8 +705,8 @@ function buildFigure(barIdx) {
       x: exitX, y: exitY, text: exitText,
       textposition: 'bottom center',
       name: 'Exit',
-      marker: { symbol: 'x', size: 13, color: '#f85149', line: { color: '#fff', width: 1.5 } },
-      textfont: { color: '#f85149', size: 10, family: 'monospace' },
+      marker: { symbol: 'x', size: 15, color: '#f85149', line: { color: '#ffffff', width: 2 } },
+      textfont: { color: '#f85149', size: 12, family: 'monospace' },
     });
   }
   if (holdX.length) {
@@ -715,7 +715,7 @@ function buildFigure(barIdx) {
       x: holdX, y: holdY, text: holdText,
       textposition: 'top center',
       name: 'Hold (H)',
-      textfont: { color: '#58a6ff', size: 10, family: 'monospace' },
+      textfont: { color: '#58a6ff', size: 11, family: 'monospace' },
       showlegend: true,
     });
   }
