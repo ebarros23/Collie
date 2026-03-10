@@ -638,6 +638,10 @@ function buildFigure(barIdx) {
   });
 
   // ── Trade markers (ALL completed trades + active trade) ──
+  // Build a lookup: triggerBar -> trigger number (1-based)
+  const triggerNumMap = {};
+  APP.allTriggers.forEach((t, i) => { triggerNumMap[t.localIdx] = i + 1; });
+
   const entryX=[], entryY=[], entryText=[];
   const exitX=[], exitY=[], exitText=[];
   const holdX=[], holdY=[], holdText=[];
@@ -651,23 +655,26 @@ function buildFigure(barIdx) {
   );
 
   for (const trade of allTrades) {
-    // Trigger bar marker (the confirmed_entry bar itself)
+    const tNum = triggerNumMap[trade.triggerBar] || '?';
+    const dirLabel = trade.entryDir > 0 ? '▲' : '▼';
+
+    // Trigger bar marker — show trigger number + direction
     if (trade.triggerBar >= startIdx && trade.triggerBar <= endIdx) {
       const b = df[trade.triggerBar];
       if (b && b.time) {
         entryX.push(b.time);
         entryY.push(b.close);
-        entryText.push(trade.entryDir > 0 ? 'LONG' : 'SHORT');
+        entryText.push(`T${tNum}`);
       }
     }
 
-    // Exit marker — show if within visible window
+    // Exit marker — show trigger number + EXIT
     if (trade.exitBar !== undefined && trade.exitBar >= startIdx && trade.exitBar <= endIdx) {
       const b = df[trade.exitBar];
       if (b && b.time) {
         exitX.push(b.time);
         exitY.push(trade.exitPrice);
-        exitText.push('EXIT');
+        exitText.push(`T${tNum} EXIT`);
       }
     }
 
@@ -687,9 +694,9 @@ function buildFigure(barIdx) {
       type: 'scatter', mode: 'markers+text',
       x: entryX, y: entryY, text: entryText,
       textposition: 'top center',
-      name: 'Entry',
-      marker: { symbol: 'triangle-up', size: 14, color: '#3fb950', line: { color: '#fff', width: 1 } },
-      textfont: { color: '#3fb950', size: 9, family: 'monospace' },
+      name: 'Trigger (Entry)',
+      marker: { symbol: 'triangle-up', size: 16, color: '#3fb950', line: { color: '#fff', width: 1.5 } },
+      textfont: { color: '#3fb950', size: 11, family: 'monospace', weight: 'bold' },
     });
   }
   if (exitX.length) {
@@ -698,8 +705,8 @@ function buildFigure(barIdx) {
       x: exitX, y: exitY, text: exitText,
       textposition: 'bottom center',
       name: 'Exit',
-      marker: { symbol: 'x', size: 12, color: '#f85149', line: { color: '#fff', width: 1.5 } },
-      textfont: { color: '#f85149', size: 9, family: 'monospace' },
+      marker: { symbol: 'x', size: 13, color: '#f85149', line: { color: '#fff', width: 1.5 } },
+      textfont: { color: '#f85149', size: 10, family: 'monospace' },
     });
   }
   if (holdX.length) {
@@ -707,7 +714,7 @@ function buildFigure(barIdx) {
       type: 'scatter', mode: 'text',
       x: holdX, y: holdY, text: holdText,
       textposition: 'top center',
-      name: 'Hold',
+      name: 'Hold (H)',
       textfont: { color: '#58a6ff', size: 10, family: 'monospace' },
       showlegend: true,
     });
