@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TFL-Collie — Rolling Playback Dashboard</title>
+  <title>TFL-Collie — Continuous Rolling Playback Dashboard</title>
 
   <!-- Plotly.js -->
   <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
@@ -420,7 +420,7 @@
 <!-- Loading overlay -->
 <div id="loading">
   <div class="spinner"></div>
-  <p>Initialising TFL-Collie dashboard…</p>
+  <p>Initialising TFL-Collie continuous playback dashboard…</p>
 </div>
 
 <div class="app-wrapper">
@@ -431,11 +431,11 @@
       <div class="logo-icon">C</div>
       <div class="logo-text">
         <h1>TFL-Collie</h1>
-        <p>SAC Model · Natural Gas · Rolling Playback</p>
+        <p>SAC Model · Natural Gas · Continuous Rolling Playback</p>
       </div>
     </div>
     <div class="header-badge">
-      Agent B: <span id="model-label">Heuristic demo mode</span>
+      Mode: <span id="model-label">Continuous Market Flow</span>
     </div>
   </header>
 
@@ -453,14 +453,10 @@
         <select id="contract-select"></select>
       </div>
       <div class="ctrl-group">
-        <label>Trigger</label>
-        <select id="trigger-select"></select>
-      </div>
-      <div class="ctrl-group">
-        <label>Playback step — <span id="step-label">1</span></label>
-        <input type="range" id="step-slider" min="0" max="0" value="0" />
+        <label>Playback position — <span id="bar-label">0</span></label>
+        <input type="range" id="bar-slider" min="0" max="0" value="0" />
         <div class="progress-wrap">
-          <div class="progress-bar" id="step-progress" style="width:0%"></div>
+          <div class="progress-bar" id="bar-progress" style="width:0%"></div>
         </div>
       </div>
       <div class="ctrl-group">
@@ -477,10 +473,10 @@
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-secondary" id="render-btn">&#9654; Render step</button>
-      <button class="btn btn-primary"   id="play-one-btn">&#9654;&#9654; Play trigger</button>
-      <button class="btn btn-success"   id="play-all-btn">&#9654;&#9654;&#9654; Play all triggers</button>
-      <button class="btn btn-danger"    id="stop-btn" disabled>&#9646;&#9646; Stop</button>
+      <button class="btn btn-secondary" id="render-btn">🔄 Render</button>
+      <button class="btn btn-primary"   id="play-btn">▶ Play</button>
+      <button class="btn btn-success"   id="play-all-btn">▶▶ Play all triggers</button>
+      <button class="btn btn-danger"    id="stop-btn" disabled>⏸ Stop</button>
     </div>
   </div>
 
@@ -491,11 +487,11 @@
     <div class="card">
       <div class="card-header">
         <div class="card-title">
-          Market Playback
+          Continuous Market Playback
           <span class="badge" id="chart-badge">—</span>
         </div>
         <div style="font-size:12px;color:var(--muted);">
-          Candle <span id="candle-counter" style="color:var(--accent);font-weight:700;">—</span>
+          Bar <span id="bar-counter" style="color:var(--accent);font-weight:700;">—</span>
         </div>
       </div>
       <div class="card-body">
@@ -506,91 +502,56 @@
     <!-- Side panel -->
     <div class="side-panel">
 
-      <!-- Agent A -->
+      <!-- Active Trade -->
       <div class="info-box agent-a">
         <div class="info-box-header">
           <div class="indicator"></div>
-          Agent A — Entry Signal
+          Active Trade
         </div>
-        <div class="info-box-body" id="agent-a-body">
-          <div class="kv-row"><span class="kv-key">Trigger</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Direction</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Entry time</span><span class="kv-val">—</span></div>
+        <div class="info-box-body" id="active-trade-body">
+          <div class="kv-row"><span class="kv-key">Status</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Entry bar</span><span class="kv-val">—</span></div>
           <div class="kv-row"><span class="kv-key">Entry price</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Blocked regime</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">fmt / pos / reg</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Direction</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bars held</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Unrealized PnL</span><span class="kv-val">—</span></div>
         </div>
       </div>
 
-      <!-- Agent B -->
+      <!-- Market Info -->
       <div class="info-box agent-b">
         <div class="info-box-header">
           <div class="indicator"></div>
-          Agent B — Exit Decision
+          Market Info
         </div>
-        <div class="info-box-body" id="agent-b-body">
-          <div class="kv-row"><span class="kv-key">Action</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Bar</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Q(HOLD)</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Q(EXIT)</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Survival</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Bars-left</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Unrealized PnL</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val reason-text">—</span></div>
+        <div class="info-box-body" id="market-info-body">
+          <div class="kv-row"><span class="kv-key">Current price</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bar time</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Open</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">High</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Low</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">ATR</span><span class="kv-val">—</span></div>
         </div>
       </div>
 
-      <!-- Summary -->
+      <!-- Triggers List -->
       <div class="info-box summary-box">
         <div class="info-box-header">
           <div class="indicator"></div>
-          Playback Summary
+          Triggers (<span id="trigger-count">0</span>)
         </div>
-        <div class="info-box-body" id="summary-body">
-          <div class="kv-row"><span class="kv-key">Contract</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Exit reason</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Realized PnL</span><span class="kv-val">—</span></div>
-          <div class="kv-row"><span class="kv-key">Model</span><span class="kv-val">—</span></div>
+        <div class="info-box-body" id="triggers-list" style="max-height:250px;overflow-y:auto;">
+          <!-- Dynamically populated -->
         </div>
       </div>
 
-    </div>
-  </div>
-
-  <!-- ── State vector tables ─────────────────────────────────────────────── -->
-  <div class="state-grid">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Agent B Scalar State</div>
-      </div>
-      <div class="card-body">
-        <div class="table-wrap">
-          <table id="state-table">
-            <thead><tr><th>Feature</th><th>Value</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">VAE Latent Vector z</div>
-      </div>
-      <div class="card-body">
-        <div class="table-wrap">
-          <table id="z-table">
-            <thead><tr><th>Dim</th><th>Value</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
     </div>
   </div>
 
   <!-- ── Decision ledger ────────────────────────────────────────────────── -->
   <div class="ledger-section card">
     <div class="card-header">
-      <div class="card-title">Decision Ledger</div>
+      <div class="card-title">Completed Trades</div>
     </div>
     <div class="card-body">
       <div class="table-wrap">
@@ -598,13 +559,13 @@
           <thead>
             <tr>
               <th>#</th>
-              <th>Bar</th>
-              <th>Time</th>
-              <th>Action</th>
-              <th>Q(Hold)</th>
-              <th>Q(Exit)</th>
-              <th>Unrealized PnL (¢)</th>
-              <th>Reason</th>
+              <th>Entry Bar</th>
+              <th>Entry Time</th>
+              <th>Exit Bar</th>
+              <th>Exit Time</th>
+              <th>Direction</th>
+              <th>Realized PnL (¢)</th>
+              <th>Exit Reason</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -615,7 +576,7 @@
 
   <!-- ── Footer ─────────────────────────────────────────────────────────── -->
   <footer>
-    <span>TFL-Collie · SAC Model for Natural Gas · Rolling Playback Dashboard</span>
+    <span>TFL-Collie · SAC Model for Natural Gas · Continuous Rolling Playback</span>
     <span>
       <a href="https://github.com/ebarros23/Collie" target="_blank">GitHub Repository</a>
       &nbsp;·&nbsp; Built with Plotly.js
@@ -626,7 +587,7 @@
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   TFL-Collie Dashboard — Pure client-side simulation with dynamic data loading
+   TFL-Collie Dashboard — Continuous Market Flow with Persistent Trade Markers
    Supports 100+ contracts with efficient lazy loading from data/ folder
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -642,25 +603,17 @@ const REGIME_TOP_PCT    = 0.40;
 const REGIME_BOTTOM_PCT = 0.40;
 const REGIME_MIN_SAMPLES = 30;
 
-const SCALAR_NAMES = [
-  "position","trade_dir","bars_held_frac","bars_remaining_frac","unrealized_pnl",
-  "atr_pct","tod_sin","tod_cos","d24_atr","peak_unreal_norm","drawdown_norm",
-  "consec_adv_norm","d12_atr","unreal_peak_ratio","bar_rng_norm","forced_exit_eta",
-  "blocked_regime_flag"
-];
-
 // ── App state ────────────────────────────────────────────────────────────────
 let APP = {
-  metadata: null,        // {contracts: [], tradeIndex: []}
-  byContractCache: {},   // {contractName: [rows]} — lazy loaded
-  currentTrade: null,
-  currentContractDf: null,
-  stepIdx: 0,
+  metadata: null,
+  currentContractData: null,
+  currentContractName: null,
+  currentBarIdx: 0,
   isPlaying: false,
   playTimer: null,
-  completedLabels: [],
-  blockRegs: new Set(),
-  allowRegs: new Set(),
+  completedTrades: [],
+  activeTrade: null,
+  allTriggers: [],
 };
 
 // ── Utility ──────────────────────────────────────────────────────────────────
@@ -669,17 +622,13 @@ function sign(v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
 function isFiniteNum(v) { return typeof v === 'number' && isFinite(v); }
 function fmt(v, d=4) { return isFiniteNum(v) ? v.toFixed(d) : '—'; }
 
-// ── Load contract data from data/ folder (lazy loading) ─────────────────────
+// ── Load contract data ───────────────────────────────────────────────────────
 async function loadContractData(contract) {
-  if (APP.byContractCache[contract]) {
-    return APP.byContractCache[contract];
-  }
   try {
     const resp = await fetch(`data/${contract}.json`);
     if (!resp.ok) throw new Error(`Failed to load ${contract}`);
     const rows = await resp.json();
-    // Process rows
-    const processed = rows.map(r => ({
+    return rows.map(r => ({
       ...r,
       bar_idx:         parseInt(r.bar_idx)   || 0,
       open:            parseFloat(r.open)    || 0,
@@ -693,148 +642,11 @@ async function loadContractData(contract) {
       confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
       entry_direction: parseFloat(r.entry_direction) || 0,
       fast_signal:     parseFloat(r.fast_signal)     || 0,
-      fmt_id:          parseInt(r.fmt_id)    ?? -1,
-      pos_id:          parseInt(r.pos_id)    ?? -1,
-      reg_id:          parseInt(r.reg_id)    ?? -1,
-      ...Object.fromEntries(
-        Array.from({length:32},(_,d)=>{
-          const k=`z${String(d).padStart(2,'0')}`;
-          return [k, parseFloat(r[k]) || 0];
-        })
-      ),
     }));
-    APP.byContractCache[contract] = processed;
-    return processed;
   } catch(e) {
     console.error(`Error loading ${contract}:`, e);
     return [];
   }
-}
-
-// ── Regime filter (mirrors compute_regime_filter) ────────────────────────────
-async function computeRegimeFilter() {
-  const regRewards = {};
-  for (const contract of APP.metadata.contracts) {
-    const grp = await loadContractData(contract);
-    const sorted = [...grp].sort((a,b) => a.bar_idx - b.bar_idx);
-    const closes = sorted.map(r => r.close);
-    const regs   = sorted.map(r => r.reg_id);
-    const dirs   = sorted.map(r => r.entry_direction);
-    const mask   = sorted.map(r => r.confirmed_entry);
-    const n = sorted.length;
-    for (let t = 0; t < n; t++) {
-      if (!mask[t]) continue;
-      if (t + 1 + MAX_HOLD >= n) continue;
-      const direction = sign(dirs[t]);
-      const reg = regs[t];
-      if (direction === 0 || reg < 0) continue;
-      let pnl = ((closes[t + 1 + MAX_HOLD] - closes[t + 1]) * direction / CENT) - TRANSACTION_COST;
-      pnl = clamp(pnl, -MAX_REWARD_CLIP, MAX_REWARD_CLIP);
-      if (!regRewards[reg]) regRewards[reg] = [];
-      regRewards[reg].push(Math.max(pnl, 0));
-    }
-  }
-  const scores = [];
-  for (const [reg, vals] of Object.entries(regRewards)) {
-    if (vals.length < REGIME_MIN_SAMPLES) continue;
-    const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
-    scores.push({ reg: parseInt(reg), mean, n: vals.length });
-  }
-  if (!scores.length) return { allowRegs: new Set(), blockRegs: new Set() };
-  scores.sort((a,b) => b.mean - a.mean);
-  const topK = Math.max(1, Math.round(scores.length * REGIME_TOP_PCT));
-  const botK = Math.max(1, Math.round(scores.length * REGIME_BOTTOM_PCT));
-  return {
-    allowRegs: new Set(scores.slice(0, topK).map(s => s.reg)),
-    blockRegs: new Set(scores.slice(-botK).map(s => s.reg)),
-  };
-}
-
-// ── Make state B scalars (mirrors make_state_B) ──────────────────────────────
-function makeStateB(contractDf, i, position, barsHeld, entryPx, tradeDir,
-                    maxUnrealized=0, consecAdv=0, forcedExitBar=null, blockRegs=new Set()) {
-  const row = contractDf[i];
-  const c = row.close;
-  let atr = row.atr;
-  if (!isFiniteNum(atr) || atr <= 1e-8) atr = Math.max(c * 0.005, 1e-6);
-  const ts = new Date(row.time);
-  const unreal = clamp((c - entryPx) * position / CENT, -MAX_REWARD_CLIP, MAX_REWARD_CLIP);
-  const peak = maxUnrealized;
-  const dd   = clamp((peak - unreal) / (atr / CENT + 1e-6), 0, 20);
-  const pkN  = clamp(peak / (atr / CENT + 1e-6), -20, 20);
-  const pr   = clamp(unreal / (Math.abs(peak) + 0.1), -2, 2);
-  const brngN = clamp((row.high - row.low) / (atr + 1e-6), 0, 4);
-  const forcedEta = forcedExitBar === null ? 0 : clamp((forcedExitBar - i) / Math.max(MAX_HOLD, 1), 0, 1);
-  const regId = isFiniteNum(row.reg_id) ? row.reg_id : -1;
-  const blockedFlag = (blockRegs.has(regId)) ? 1.0 : 0.0;
-  const hourFrac = ts.getUTCHours() + ts.getUTCMinutes() / 60;
-  const ema6  = isFiniteNum(row.ema6)  ? row.ema6  : c;
-  const sma12 = isFiniteNum(row.sma12) ? row.sma12 : c;
-  const sma24 = isFiniteNum(row.sma24) ? row.sma24 : c;
-  const sc = [
-    position,
-    tradeDir,
-    barsHeld / MAX_HOLD,
-    Math.max(MAX_HOLD - barsHeld, 0) / MAX_HOLD,
-    unreal,
-    atr / Math.max(c, 1e-6) * 100,
-    Math.sin(2 * Math.PI * hourFrac / 24),
-    Math.cos(2 * Math.PI * hourFrac / 24),
-    (ema6 - sma24) / (atr + 1e-6),
-    pkN,
-    dd,
-    Math.min(consecAdv, 8) / 8,
-    (ema6 - sma12) / (atr + 1e-6),
-    pr,
-    brngN,
-    forcedEta,
-    blockedFlag,
-  ].map(v => isFiniteNum(v) ? v : 0);
-  const z = Array.from({length:32}, (_,d) => {
-    const key = `z${String(d).padStart(2,'0')}`;
-    const val = row[key];
-    return isFiniteNum(val) ? val : 0;
-  });
-  const fmtId = isFiniteNum(row.fmt_id) ? row.fmt_id : -1;
-  const posId = isFiniteNum(row.pos_id) ? row.pos_id : -1;
-  return { z, fmtId, posId, regId, sc };
-}
-
-// ── Heuristic Agent B (mirrors heuristic_agent_b_action) ─────────────────────
-function heuristicAgentB(sc, barsHeld) {
-  const unreal = sc[4], d24 = Math.abs(sc[8]), dd = sc[10], consecAdv = sc[11];
-  const d12 = Math.abs(sc[12]), ratio = sc[13], eta = sc[15], blocked = sc[16];
-  let contScore = 0.60*d24 + 0.35*d12 + 0.15*ratio + 0.12*clamp(unreal/2, -2, 2)
-                - 0.65*dd - 0.30*consecAdv - 0.60*blocked - 0.40*(1 - eta);
-  if (barsHeld < MIN_HOLD_BARS) contScore += 0.25;
-  const qHold = contScore;
-  const qExit = -contScore + 0.10*dd + 0.10*(1 - eta);
-  const action = qHold >= qExit ? 0 : 1;
-  const survival = 1 / (1 + Math.exp(-contScore));
-  const barsLeft = clamp(eta * (0.65 + 0.35*survival), 0, 1);
-  return { action, qHold, qExit, survival, barsLeft };
-}
-
-// ── Explain decision (mirrors explain_decision) ───────────────────────────────
-function explainDecision(action, qHold, qExit, sc) {
-  const bits = [];
-  const dd=sc[10], d24=sc[8], d12=sc[12], eta=sc[15], blocked=sc[16], unreal=sc[4], consecAdv=sc[11];
-  if (action === 0) {
-    bits.push("HOLD is preferred");
-    if (Math.abs(d24) > 0.35) bits.push("trend still has structure");
-    if (Math.abs(d12) > 0.20) bits.push("fast spread supports continuation");
-    if (dd < 0.75) bits.push("drawdown is controlled");
-    if (eta > 0.30) bits.push("deadline is not close");
-    if (unreal > 0) bits.push("trade is positive");
-  } else {
-    bits.push("EXIT is preferred");
-    if (dd >= 0.75) bits.push("drawdown has grown");
-    if (eta <= 0.30) bits.push("deadline is close");
-    if (blocked >= 0.5) bits.push("regime is blocked");
-    if (consecAdv >= 0.50) bits.push("adverse bars are accumulating");
-    if (qExit > qHold) bits.push("continuation value weakened");
-  }
-  return bits.join("; ") + ".";
 }
 
 // ── Find forced exit bar ──────────────────────────────────────────────────────
@@ -847,99 +659,88 @@ function findForcedExitBar(contractDf, entryBar, entryDirection) {
   return endCap;
 }
 
-// ── Simulate trade (mirrors simulate_trade) ───────────────────────────────────
-function simulateTrade(contractDf, trigLocalIdx, blockRegs) {
-  const sorted = [...contractDf].sort((a,b) => a.bar_idx - b.bar_idx);
-  const trig = trigLocalIdx;
-  const trigRow = sorted[trig];
+// ── Simulate a single trade ──────────────────────────────────────────────────
+function simulateTrade(contractDf, triggerBarIdx) {
+  const trigRow = contractDf[triggerBarIdx];
   const entryDirection = sign(trigRow.entry_direction);
-  const regId = isFiniteNum(trigRow.reg_id) ? trigRow.reg_id : -1;
-  const blockedRegime = regId >= 0 && blockRegs.has(regId);
-  if (trig + 1 >= sorted.length) throw new Error("Trigger bar too close to end.");
-  const entryBar = trig + 1;
-  const entryRow = sorted[entryBar];
+  if (triggerBarIdx + 1 >= contractDf.length) return null;
+  
+  const entryBar = triggerBarIdx + 1;
+  const entryRow = contractDf[entryBar];
   const entryPrice = entryRow.close;
-  const entryTime  = entryRow.time;
-  const forcedExitBar = findForcedExitBar(sorted, entryBar, entryDirection);
-  const decisions = [];
+  const entryTime = entryRow.time;
+  
+  const forcedExitBar = findForcedExitBar(contractDf, entryBar, entryDirection);
   const position = entryDirection > 0 ? 1 : -1;
-  let barsHeld = 0, maxUnrealized = 0, consecAdv = 0, prevClose = entryPrice;
-  let exitBar = forcedExitBar, exitReason = "Forced exit", exitPrice = sorted[exitBar].close;
-  for (let i = entryBar; i <= Math.min(forcedExitBar, sorted.length - 1); i++) {
-    const row = sorted[i];
+  
+  let exitBar = forcedExitBar;
+  let exitReason = "Forced exit";
+  let barsHeld = 0;
+  let maxUnrealized = 0;
+  
+  for (let i = entryBar; i <= forcedExitBar && i < contractDf.length; i++) {
+    const row = contractDf[i];
     const c = row.close;
     const unreal = (c - entryPrice) * position / CENT;
     maxUnrealized = Math.max(maxUnrealized, unreal);
-    if (i > entryBar) {
-      const barMtm = (c - prevClose) * position / CENT;
-      consecAdv = barMtm < 0 ? consecAdv + 1 : 0;
+    
+    // Simple heuristic: exit if drawdown > threshold or bars held > MAX_HOLD
+    if (i > entryBar && barsHeld >= MIN_HOLD_BARS) {
+      const dd = maxUnrealized - unreal;
+      if (dd > 5.0) { // Simple drawdown threshold
+        exitBar = i;
+        exitReason = "Drawdown exit";
+        break;
+      }
     }
-    prevClose = c;
-    const { z, fmtId, posId, regId: regIdI, sc } = makeStateB(
-      sorted, i, position, barsHeld, entryPrice, position,
-      maxUnrealized, consecAdv, forcedExitBar, blockRegs
-    );
-    let { action, qHold, qExit, survival, barsLeft } = heuristicAgentB(sc, barsHeld);
-    if (barsHeld < MIN_HOLD_BARS) action = 0;
-    if (i >= forcedExitBar) { action = 1; exitReason = "Forced exit: opposite fast signal or max-hold cap"; }
-    const reason = explainDecision(action, qHold, qExit, sc);
-    decisions.push({ barIdx: i, timestamp: row.time, action: action === 0 ? "HOLD" : "EXIT",
-      qHold, qExit, survival, barsLeftScore: barsLeft,
-      unrealizedPnlCents: unreal, barsHeld, reason, sc, z });
-    if (action === 1) {
-      exitBar = i; exitPrice = c;
-      if (i < forcedExitBar) exitReason = "Agent B voluntary exit";
+    
+    if (i >= forcedExitBar) {
+      exitBar = i;
+      exitReason = "Forced exit: opposite fast signal or max-hold cap";
       break;
     }
+    
     barsHeld++;
   }
+  
+  const exitRow = contractDf[exitBar];
+  const exitPrice = exitRow.close;
+  const exitTime = exitRow.time;
   const realizedPnl = (exitPrice - entryPrice) * position / CENT - TRANSACTION_COST;
+  
   return {
-    contract: String(trigRow.contract),
-    triggerBar: trigRow.bar_idx,
-    entryBar, entryTime, entryDirection, entryPrice,
-    exitBar, exitTime: sorted[exitBar].time, exitPrice,
-    realizedPnlCents: realizedPnl, exitReason, decisions,
-    blockedRegime,
-    fmtId: isFiniteNum(trigRow.fmt_id) ? trigRow.fmt_id : -1,
-    posId: isFiniteNum(trigRow.pos_id) ? trigRow.pos_id : -1,
-    regId,
-    triggerLabel: `bar=${trigRow.bar_idx} | ${trigRow.time} | ${entryDirection > 0 ? 'LONG' : 'SHORT'} | reg=${regId}`,
-    sortedDf: sorted,
+    triggerBarIdx,
+    entryBar,
+    entryTime,
+    entryPrice,
+    entryDirection,
+    exitBar,
+    exitTime,
+    exitPrice,
+    realizedPnlCents: realizedPnl,
+    exitReason,
+    barsHeld,
   };
 }
 
-// ── Window bounds (mirrors window_bounds) ─────────────────────────────────────
+// ── Window bounds ────────────────────────────────────────────────────────────
 function windowBounds(nRows, currentBarIdx, lookback, lookahead) {
   const start = Math.max(0, currentBarIdx - Math.max(lookback, 1));
   const end   = Math.min(nRows - 1, currentBarIdx + Math.max(lookahead, 0));
   return { start, end };
 }
 
-// ── Progressive series (mirrors progressive_series) ──────────────────────────
-function progressiveSeries(df, key, visEnd, startIdx) {
-  const out = [];
-  for (let idx = startIdx; idx < df.length; idx++) {
-    const val = df[idx][key];
-    if (idx <= visEnd && isFiniteNum(val)) out.push(val);
-    else out.push(null);
-  }
-  return out;
-}
-
-// ── Build Plotly figure (mirrors make_rolling_figure) ──────────────────────
-function buildFigure(trade, stepIdx, historicalTrades=[]) {
-  const contractDf = trade.sortedDf;
-  const dec = trade.decisions[stepIdx];
-  const currentBarIdx = dec.barIdx;
+// ── Build Plotly figure ──────────────────────────────────────────────────────
+function buildFigure(contractDf, currentBarIdx, completedTrades=[]) {
   const lookback  = parseInt(document.getElementById('lookback-slider').value);
   const lookahead = parseInt(document.getElementById('lookahead-slider').value);
   const { start: startIdx, end: endIdx } = windowBounds(contractDf.length, currentBarIdx, lookback, lookahead);
+  
   const windowDf  = contractDf.slice(startIdx, endIdx + 1);
   const visibleDf = contractDf.slice(startIdx, currentBarIdx + 1);
-  const shownDecisions = trade.decisions.slice(0, stepIdx + 1);
   const traces = [];
 
+  // Candlestick
   traces.push({
     type: 'candlestick',
     x:     visibleDf.map(r => r.time),
@@ -953,11 +754,12 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     whiskerwidth: 0.3,
   });
 
+  // Moving averages
   const wTimes = windowDf.map(r => r.time);
   traces.push({
     type: 'scatter', mode: 'lines',
     x: wTimes,
-    y: progressiveSeries(contractDf, 'ema6', currentBarIdx, startIdx),
+    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.ema6) ? r.ema6 : null),
     name: 'EMA6',
     line: { color: '#58a6ff', width: 1.5 },
     connectgaps: false,
@@ -965,7 +767,7 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
   traces.push({
     type: 'scatter', mode: 'lines',
     x: wTimes,
-    y: progressiveSeries(contractDf, 'sma12', currentBarIdx, startIdx),
+    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.sma12) ? r.sma12 : null),
     name: 'SMA12',
     line: { color: '#d29922', width: 1.5 },
     connectgaps: false,
@@ -973,117 +775,59 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
   traces.push({
     type: 'scatter', mode: 'lines',
     x: wTimes,
-    y: progressiveSeries(contractDf, 'sma24', currentBarIdx, startIdx),
+    y: windowDf.map((r, i) => startIdx + i <= currentBarIdx && isFiniteNum(r.sma24) ? r.sma24 : null),
     name: 'SMA24',
     line: { color: '#a371f7', width: 1.5 },
     connectgaps: false,
   });
 
-  if (startIdx <= trade.entryBar && trade.entryBar <= currentBarIdx) {
-    const entryRow = contractDf[trade.entryBar];
+  // Completed trade markers
+  const pastEntryX=[], pastEntryY=[], pastExitX=[], pastExitY=[];
+  for (const trade of completedTrades) {
+    if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
+      pastEntryX.push(contractDf[trade.entryBar].time);
+      pastEntryY.push(trade.entryPrice);
+    }
+    if (startIdx <= trade.exitBar && trade.exitBar <= endIdx) {
+      pastExitX.push(contractDf[trade.exitBar].time);
+      pastExitY.push(trade.exitPrice);
+    }
+  }
+  if (pastEntryX.length) {
     traces.push({
-      type: 'scatter', mode: 'markers+text',
-      x: [entryRow.time], y: [trade.entryPrice],
-      name: 'Agent A',
-      text: ['A'],
-      textposition: 'top center',
-      textfont: { color: '#3fb950', size: 11, family: 'monospace' },
-      marker: {
-        symbol: trade.entryDirection > 0 ? 'triangle-up' : 'triangle-down',
-        size: 14, color: '#3fb950',
-        line: { color: '#fff', width: 1 },
-      },
+      type: 'scatter', mode: 'markers',
+      x: pastEntryX, y: pastEntryY, name: 'Past Entries',
+      marker: { symbol: 'diamond', size: 10, color: '#3fb950', line: { color: '#fff', width: 1 } },
+    });
+  }
+  if (pastExitX.length) {
+    traces.push({
+      type: 'scatter', mode: 'markers',
+      x: pastExitX, y: pastExitY, name: 'Past Exits',
+      marker: { symbol: 'x', size: 10, color: '#f85149', line: { color: '#fff', width: 1 } },
     });
   }
 
-  const pastAx=[], pastAy=[], pastBx=[], pastBy=[], pastBtext=[];
-  for (const pt of historicalTrades) {
-    if (startIdx <= pt.entryBar && pt.entryBar <= endIdx) {
-      pastAx.push(contractDf[pt.entryBar].time);
-      pastAy.push(pt.entryPrice);
-    }
-    for (const d of pt.decisions) {
-      if (startIdx <= d.barIdx && d.barIdx <= endIdx) {
-        pastBx.push(contractDf[d.barIdx].time);
-        pastBy.push(contractDf[d.barIdx].close);
-        pastBtext.push(d.action === 'EXIT' ? 'B EXIT' : 'B HOLD');
-      }
-    }
-  }
-  if (pastAx.length) {
-    traces.push({
-      type: 'scatter', mode: 'markers+text',
-      x: pastAx, y: pastAy, name: 'Past Agent A',
-      text: pastAx.map(() => 'A'),
-      textposition: 'top center',
-      textfont: { color: '#8b949e', size: 10 },
-      marker: { symbol: 'diamond', size: 10, color: '#8b949e' },
-    });
-  }
-  if (pastBx.length) {
-    traces.push({
-      type: 'scatter', mode: 'markers+text',
-      x: pastBx, y: pastBy, name: 'Past Agent B',
-      text: pastBtext,
-      textposition: 'bottom center',
-      textfont: { color: '#8b949e', size: 9 },
-      marker: { symbol: 'x', size: 7, color: '#8b949e' },
-    });
-  }
+  // Current position marker
+  const currentRow = contractDf[currentBarIdx];
+  traces.push({
+    type: 'scatter', mode: 'markers',
+    x: [currentRow.time], y: [currentRow.close],
+    name: 'Current',
+    marker: { symbol: 'circle', size: 12, color: '#58a6ff', line: { color: '#fff', width: 2 } },
+  });
 
-  const bx=[], by=[], btext=[], bcolors=[];
-  for (const d of shownDecisions) {
-    if (startIdx <= d.barIdx && d.barIdx <= currentBarIdx) {
-      bx.push(contractDf[d.barIdx].time);
-      by.push(contractDf[d.barIdx].close);
-      btext.push(d.action === 'EXIT' ? 'B EXIT' : 'B HOLD');
-      bcolors.push(d.action === 'EXIT' ? '#d29922' : '#58a6ff');
-    }
-  }
-  if (bx.length) {
-    traces.push({
-      type: 'scatter', mode: 'markers+text',
-      x: bx, y: by, name: 'Agent B decisions',
-      text: btext,
-      textposition: 'bottom center',
-      textfont: { size: 9 },
-      marker: { symbol: 'circle', size: 9, color: bcolors, line: { color: '#fff', width: 0.5 } },
-    });
-  }
-
-  const entryTs  = contractDf[trade.entryBar].time;
-  const exitTs   = contractDf[trade.exitBar].time;
   const currentTs = contractDf[currentBarIdx].time;
   const shapes = [
     { type:'line', x0:currentTs, x1:currentTs, y0:0, y1:1, yref:'paper',
       line:{ color:'#e6edf3', width:1, dash:'dash' } },
   ];
-  if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
-    shapes.push({ type:'line', x0:entryTs, x1:entryTs, y0:0, y1:1, yref:'paper',
-      line:{ color:'#3fb950', width:1, dash:'dot' } });
-  }
-  if (startIdx <= trade.exitBar && trade.exitBar <= endIdx) {
-    shapes.push({ type:'line', x0:exitTs, x1:exitTs, y0:0, y1:1, yref:'paper',
-      line:{ color:'#f85149', width:1, dash:'dot' } });
-  }
-  const annotations = [
-    { x:currentTs, y:1, yref:'paper', text:'Now', showarrow:false, yshift:14,
-      font:{ color:'#e6edf3', size:11 }, bgcolor:'rgba(0,0,0,0)' },
-  ];
-  if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
-    annotations.push({ x:entryTs, y:1, yref:'paper', text:'Entry', showarrow:false, yshift:14,
-      font:{ color:'#3fb950', size:11 }, bgcolor:'rgba(0,0,0,0)' });
-  }
-  if (startIdx <= trade.exitBar && trade.exitBar <= endIdx) {
-    annotations.push({ x:exitTs, y:1, yref:'paper', text:'Exit zone', showarrow:false, yshift:14,
-      font:{ color:'#f85149', size:11 }, bgcolor:'rgba(0,0,0,0)' });
-  }
 
   const layout = {
     paper_bgcolor: '#161b22',
     plot_bgcolor:  '#0d1117',
     font: { color: '#e6edf3', family: 'Inter, Segoe UI, sans-serif', size: 12 },
-    title: { text: `${trade.contract} — rolling market playback`, font: { size: 14 }, x: 0.01 },
+    title: { text: `${APP.currentContractName} — continuous market flow`, font: { size: 14 }, x: 0.01 },
     xaxis: {
       title: '', color: '#8b949e',
       gridcolor: '#21262d', zerolinecolor: '#30363d',
@@ -1098,75 +842,78 @@ function buildFigure(trade, stepIdx, historicalTrades=[]) {
     margin: { t: 50, b: 40, l: 60, r: 20 },
     legend: { orientation: 'h', y: 1.06, x: 0, font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' },
     shapes,
-    annotations,
-    uirevision: 'rolling-playback',
+    uirevision: 'continuous-playback',
   };
 
   return { traces, layout };
 }
 
-// ── Render step ───────────────────────────────────────────────────────────────
-function renderStep(stepIdx, historicalTrades=[]) {
-  const trade = APP.currentTrade;
-  if (!trade) return;
-  const nSteps = trade.decisions.length;
-  stepIdx = clamp(stepIdx, 0, Math.max(nSteps - 1, 0));
-  APP.stepIdx = stepIdx;
-  const dec = trade.decisions[stepIdx];
+// ── Render current bar ───────────────────────────────────────────────────────
+function renderBar(barIdx) {
+  if (!APP.currentContractData) return;
+  
+  barIdx = clamp(barIdx, 0, APP.currentContractData.length - 1);
+  APP.currentBarIdx = barIdx;
+  
+  const slider = document.getElementById('bar-slider');
+  slider.max = APP.currentContractData.length - 1;
+  slider.value = barIdx;
+  document.getElementById('bar-label').textContent = barIdx;
+  const pct = APP.currentContractData.length > 1 ? (barIdx / (APP.currentContractData.length - 1) * 100) : 0;
+  document.getElementById('bar-progress').style.width = pct + '%';
+  document.getElementById('bar-counter').textContent = `${barIdx} / ${APP.currentContractData.length - 1}`;
 
-  const slider = document.getElementById('step-slider');
-  slider.max = Math.max(nSteps - 1, 0);
-  slider.value = stepIdx;
-  document.getElementById('step-label').textContent = stepIdx + 1;
-  const pct = nSteps > 1 ? (stepIdx / (nSteps - 1) * 100) : 0;
-  document.getElementById('step-progress').style.width = pct + '%';
-  document.getElementById('candle-counter').textContent = `${stepIdx+1} / ${nSteps}`;
-
-  const { traces, layout } = buildFigure(trade, stepIdx, historicalTrades);
+  const { traces, layout } = buildFigure(APP.currentContractData, barIdx, APP.completedTrades);
   Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
 
-  document.getElementById('chart-badge').textContent = trade.contract;
+  const row = APP.currentContractData[barIdx];
+  document.getElementById('chart-badge').textContent = APP.currentContractName;
 
-  const dirClass = trade.entryDirection > 0 ? 'long' : 'short';
-  const dirText  = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
-  document.getElementById('agent-a-body').innerHTML = kvRow('Trigger', trade.triggerLabel)
-    + kvRow('Direction', `<span class="kv-val ${dirClass}">${dirText}</span>`, true)
-    + kvRow('Entry time', trade.entryTime)
-    + kvRow('Entry price', fmt(trade.entryPrice, 5))
-    + kvRow('Blocked regime', String(trade.blockedRegime))
-    + kvRow('fmt / pos / reg', `${trade.fmtId} / ${trade.posId} / ${trade.regId}`);
+  // Market info
+  document.getElementById('market-info-body').innerHTML =
+    kvRow('Current price', fmt(row.close, 5))
+    + kvRow('Bar time', row.time)
+    + kvRow('Open', fmt(row.open, 5))
+    + kvRow('High', fmt(row.high, 5))
+    + kvRow('Low', fmt(row.low, 5))
+    + kvRow('ATR', fmt(row.atr, 5));
 
-  const actionClass = dec.action === 'HOLD' ? 'hold' : 'exit';
-  const pnlClass    = dec.unrealizedPnlCents >= 0 ? 'pos' : 'neg';
-  document.getElementById('agent-b-body').innerHTML =
-    kvRow('Action', `<span class="kv-val ${actionClass}">${dec.action}</span>`, true)
-    + kvRow('Bar', dec.barIdx)
-    + kvRow('Time', dec.timestamp)
-    + kvRow('Q(HOLD)', fmt(dec.qHold))
-    + kvRow('Q(EXIT)', fmt(dec.qExit))
-    + kvRow('Survival', fmt(dec.survival, 3))
-    + kvRow('Bars-left', fmt(dec.barsLeftScore, 3))
-    + kvRow('Unrealized PnL', `<span class="kv-val ${pnlClass}">${fmt(dec.unrealizedPnlCents, 3)} ¢</span>`, true)
-    + `<div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val reason-text" title="${dec.reason}">${dec.reason}</span></div>`;
+  // Active trade info
+  if (APP.activeTrade) {
+    const trade = APP.activeTrade;
+    if (barIdx >= trade.entryBar && barIdx < trade.exitBar) {
+      const unrealPnl = (row.close - trade.entryPrice) * trade.entryDirection / CENT;
+      const dirClass = trade.entryDirection > 0 ? 'long' : 'short';
+      const dirText  = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
+      document.getElementById('active-trade-body').innerHTML =
+        kvRow('Status', '<span class="kv-val hold">ACTIVE</span>', true)
+        + kvRow('Entry bar', trade.entryBar)
+        + kvRow('Entry price', fmt(trade.entryPrice, 5))
+        + kvRow('Direction', `<span class="kv-val ${dirClass}">${dirText}</span>`, true)
+        + kvRow('Bars held', barIdx - trade.entryBar)
+        + kvRow('Unrealized PnL', `<span class="kv-val ${unrealPnl >= 0 ? 'pos' : 'neg'}">${fmt(unrealPnl, 3)} ¢</span>`, true);
+    } else if (barIdx >= trade.exitBar) {
+      document.getElementById('active-trade-body').innerHTML =
+        kvRow('Status', '<span class="kv-val exit">CLOSED</span>', true)
+        + kvRow('Entry bar', trade.entryBar)
+        + kvRow('Exit bar', trade.exitBar)
+        + kvRow('Exit price', fmt(trade.exitPrice, 5))
+        + kvRow('Realized PnL', `<span class="kv-val ${trade.realizedPnlCents >= 0 ? 'pos' : 'neg'}">${fmt(trade.realizedPnlCents, 3)} ¢</span>`, true)
+        + kvRow('Exit reason', trade.exitReason);
+    }
+  } else {
+    document.getElementById('active-trade-body').innerHTML =
+      kvRow('Status', '<span class="kv-val muted">IDLE</span>', true)
+      + kvRow('Entry bar', '—')
+      + kvRow('Entry price', '—')
+      + kvRow('Direction', '—')
+      + kvRow('Bars held', '—')
+      + kvRow('Unrealized PnL', '—');
+  }
 
-  const realClass = trade.realizedPnlCents >= 0 ? 'pos' : 'neg';
-  document.getElementById('summary-body').innerHTML =
-    kvRow('Contract', trade.contract)
-    + kvRow('Exit reason', trade.exitReason)
-    + kvRow('Realized PnL', `<span class="kv-val ${realClass}">${fmt(trade.realizedPnlCents, 3)} ¢</span>`, true)
-    + kvRow('Model', 'Heuristic demo mode');
-
+  // Update status
   document.getElementById('status-text').textContent =
-    `${trade.triggerLabel} — candle ${stepIdx+1}/${nSteps}. Window rolls forward without compressing candles.`;
-
-  renderTable('state-table', ['Feature','Value'],
-    dec.sc.map((v,i) => [SCALAR_NAMES[i] || `sc${i}`, fmt(v,6)]));
-
-  renderTable('z-table', ['Dim','Value'],
-    dec.z.map((v,d) => [`z${String(d).padStart(2,'0')}`, fmt(v,6)]));
-
-  const shownDecs = trade.decisions.slice(0, stepIdx + 1);
-  renderLedger(shownDecs);
+    `${APP.currentContractName} · Bar ${barIdx} / ${APP.currentContractData.length - 1}. ${APP.completedTrades.length} trades completed.`;
 }
 
 function kvRow(key, val, raw=false) {
@@ -1174,75 +921,46 @@ function kvRow(key, val, raw=false) {
   return `<div class="kv-row"><span class="kv-key">${key}</span>${valHtml}</div>`;
 }
 
-function renderTable(id, headers, rows) {
-  const tbody = document.querySelector(`#${id} tbody`);
-  tbody.innerHTML = rows.map(r =>
-    `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`
-  ).join('');
-}
-
-function renderLedger(decisions) {
-  const tbody = document.querySelector('#ledger-table tbody');
-  tbody.innerHTML = decisions.map((d, ix) => {
-    const ac = d.action === 'HOLD' ? 'action-hold' : 'action-exit';
-    const pc = d.unrealizedPnlCents >= 0 ? 'pnl-pos' : 'pnl-neg';
-    return `<tr>
-      <td>${ix+1}</td>
-      <td>${d.barIdx}</td>
-      <td>${d.timestamp}</td>
-      <td class="${ac}">${d.action}</td>
-      <td>${fmt(d.qHold)}</td>
-      <td>${fmt(d.qExit)}</td>
-      <td class="${pc}">${fmt(d.unrealizedPnlCents,3)}</td>
-      <td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.reason}">${d.reason}</td>
-    </tr>`;
-  }).join('');
-  const wrap = tbody.closest('.table-wrap');
-  if (wrap) wrap.scrollTop = wrap.scrollHeight;
-}
-
 // ── Populate contract dropdown ────────────────────────────────────────────────
 function populateContracts() {
   const sel = document.getElementById('contract-select');
   sel.innerHTML = APP.metadata.contracts.map(c => `<option value="${c}">${c}</option>`).join('');
-  sel.addEventListener('change', () => {
-    populateTriggers(sel.value);
-    loadTrigger();
-  });
+  sel.addEventListener('change', loadContract);
 }
 
-function populateTriggers(contract) {
-  const sel = document.getElementById('trigger-select');
-  const choices = APP.metadata.tradeIndex.filter(t => t.contract === contract);
-  sel.innerHTML = choices.length
-    ? choices.map(t => `<option value="${t.label}">${t.label}</option>`).join('')
-    : '<option>No trades found</option>';
-  sel.removeEventListener('change', loadTrigger);
-  sel.addEventListener('change', loadTrigger);
-}
-
-async function loadTrigger() {
+async function loadContract() {
   const contract = document.getElementById('contract-select').value;
-  const label    = document.getElementById('trigger-select').value;
   try {
-    const contractDf = await loadContractData(contract);
-    if (!contractDf.length) {
-      document.getElementById('status-text').textContent = 'Error: Contract data is empty';
-      return;
-    }
-    const entry = APP.metadata.tradeIndex.find(t => t.contract === contract && t.label === label);
-    if (!entry) {
-      document.getElementById('status-text').textContent = 'Error: Trigger not found';
-      return;
-    }
-    APP.currentTrade = simulateTrade(contractDf, entry.localIdx, APP.blockRegs);
-    APP.currentContractDf = contractDf;
-    APP.stepIdx = 0;
-    APP.completedLabels = [];
-    renderStep(0);
+    APP.currentContractData = await loadContractData(contract);
+    APP.currentContractName = contract;
+    APP.currentBarIdx = 0;
+    APP.completedTrades = [];
+    APP.activeTrade = null;
+    
+    // Find all triggers for this contract
+    const triggers = APP.metadata.tradeIndex.filter(t => t.contract === contract);
+    APP.allTriggers = triggers;
+    
+    // Populate triggers list
+    const triggersList = document.getElementById('triggers-list');
+    triggersList.innerHTML = triggers.map((t, i) => 
+      `<div class="kv-row" style="cursor:pointer;padding:6px;border-radius:4px;background:var(--surface2);margin-bottom:4px;" onclick="jumpToTrigger(${i})">
+        <span class="kv-key">T${i+1}</span>
+        <span class="kv-val" style="font-size:11px;">${t.label}</span>
+      </div>`
+    ).join('');
+    document.getElementById('trigger-count').textContent = triggers.length;
+    
+    renderBar(0);
   } catch(e) {
     document.getElementById('status-text').textContent = 'Error: ' + e.message;
   }
+}
+
+function jumpToTrigger(triggerIdx) {
+  if (triggerIdx < 0 || triggerIdx >= APP.allTriggers.length) return;
+  const trigger = APP.allTriggers[triggerIdx];
+  renderBar(trigger.localIdx);
 }
 
 // ── Playback controls ─────────────────────────────────────────────────────────
@@ -1250,66 +968,77 @@ function stopPlayback() {
   APP.isPlaying = false;
   if (APP.playTimer) { clearTimeout(APP.playTimer); APP.playTimer = null; }
   document.getElementById('stop-btn').disabled = true;
-  document.getElementById('play-one-btn').disabled = false;
+  document.getElementById('play-btn').disabled = false;
   document.getElementById('play-all-btn').disabled = false;
 }
 
-function startPlayOne() {
-  if (!APP.currentTrade) return;
+function startPlay() {
+  if (!APP.currentContractData) return;
   stopPlayback();
   APP.isPlaying = true;
   document.getElementById('stop-btn').disabled = false;
-  document.getElementById('play-one-btn').disabled = true;
+  document.getElementById('play-btn').disabled = true;
   document.getElementById('play-all-btn').disabled = true;
-  const nSteps = APP.currentTrade.decisions.length;
+  
+  const nBars = APP.currentContractData.length;
   const speed  = parseFloat(document.getElementById('speed-slider').value) * 1000;
-  let step = APP.stepIdx;
+  let bar = APP.currentBarIdx;
+  
   function tick() {
-    if (!APP.isPlaying || step >= nSteps) { stopPlayback(); return; }
-    renderStep(step);
-    step++;
+    if (!APP.isPlaying || bar >= nBars) { stopPlayback(); return; }
+    
+    // Check if we hit a trigger
+    const trigger = APP.allTriggers.find(t => t.localIdx === bar);
+    if (trigger && APP.activeTrade === null) {
+      // Start a new trade
+      const trade = simulateTrade(APP.currentContractData, bar);
+      if (trade) {
+        APP.activeTrade = trade;
+      }
+    }
+    
+    // Check if active trade should close
+    if (APP.activeTrade && bar >= APP.activeTrade.exitBar) {
+      APP.completedTrades.push(APP.activeTrade);
+      updateLedger();
+      APP.activeTrade = null;
+    }
+    
+    renderBar(bar);
+    bar++;
     APP.playTimer = setTimeout(tick, speed);
   }
+  
   tick();
 }
 
-async function startPlayAll() {
-  const contract = document.getElementById('contract-select').value;
-  const choices  = APP.metadata.tradeIndex.filter(t => t.contract === contract);
-  if (!choices.length) return;
-  stopPlayback();
-  APP.isPlaying = true;
-  document.getElementById('stop-btn').disabled = false;
-  document.getElementById('play-one-btn').disabled = true;
-  document.getElementById('play-all-btn').disabled = true;
-  APP.completedLabels = [];
-  const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
-  let ci = 0, step = 0;
-  async function nextTrade() {
-    if (!APP.isPlaying || ci >= choices.length) { stopPlayback(); return; }
-    const entry = choices[ci];
-    document.getElementById('trigger-select').value = entry.label;
-    try {
-      const contractDf = await loadContractData(contract);
-      APP.currentTrade = simulateTrade(contractDf, entry.localIdx, APP.blockRegs);
-    } catch(e) { ci++; nextTrade(); return; }
-    step = 0;
-    tick();
-  }
-  function tick() {
-    if (!APP.isPlaying) return;
-    const nSteps = APP.currentTrade.decisions.length;
-    if (step >= nSteps) {
-      APP.completedLabels.push(choices[ci].label);
-      ci++;
-      nextTrade();
-      return;
-    }
-    renderStep(step);
-    step++;
-    APP.playTimer = setTimeout(tick, speed);
-  }
-  nextTrade();
+function startPlayAll() {
+  if (!APP.currentContractData) return;
+  APP.completedTrades = [];
+  APP.activeTrade = null;
+  APP.currentBarIdx = 0;
+  startPlay();
+}
+
+// ── Update ledger ────────────────────────────────────────────────────────────
+function updateLedger() {
+  const tbody = document.querySelector('#ledger-table tbody');
+  tbody.innerHTML = APP.completedTrades.map((trade, ix) => {
+    const pc = trade.realizedPnlCents >= 0 ? 'pnl-pos' : 'pnl-neg';
+    const dir = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
+    return `<tr>
+      <td>${ix+1}</td>
+      <td>${trade.entryBar}</td>
+      <td>${trade.entryTime}</td>
+      <td>${trade.exitBar}</td>
+      <td>${trade.exitTime}</td>
+      <td>${dir}</td>
+      <td class="${pc}">${fmt(trade.realizedPnlCents, 3)}</td>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${trade.exitReason}">${trade.exitReason}</td>
+    </tr>`;
+  }).join('');
+  const wrap = tbody.closest('.table-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
 }
 
 // ── Range slider live labels ──────────────────────────────────────────────────
@@ -1324,15 +1053,16 @@ async function init() {
   bindSlider('speed-slider',    'speed-label',    's');
   bindSlider('lookback-slider', 'lookback-label', '');
   bindSlider('lookahead-slider','lookahead-label','');
-  document.getElementById('step-slider').addEventListener('input', e => {
-    document.getElementById('step-label').textContent = parseInt(e.target.value) + 1;
-    renderStep(parseInt(e.target.value));
+  
+  document.getElementById('bar-slider').addEventListener('input', e => {
+    document.getElementById('bar-label').textContent = parseInt(e.target.value);
+    renderBar(parseInt(e.target.value));
   });
 
   document.getElementById('render-btn').addEventListener('click', () => {
-    renderStep(parseInt(document.getElementById('step-slider').value));
+    renderBar(parseInt(document.getElementById('bar-slider').value));
   });
-  document.getElementById('play-one-btn').addEventListener('click', startPlayOne);
+  document.getElementById('play-btn').addEventListener('click', startPlay);
   document.getElementById('play-all-btn').addEventListener('click', startPlayAll);
   document.getElementById('stop-btn').addEventListener('click', stopPlayback);
 
@@ -1347,22 +1077,15 @@ async function init() {
     return;
   }
 
-  // Compute regime filter
-  document.getElementById('status-text').textContent = 'Computing regime filter…';
-  const { allowRegs, blockRegs } = await computeRegimeFilter();
-  APP.allowRegs = allowRegs;
-  APP.blockRegs = blockRegs;
-
   populateContracts();
   if (APP.metadata.contracts.length) {
-    populateTriggers(APP.metadata.contracts[0]);
-    loadTrigger();
+    loadContract();
   }
 
   document.getElementById('loading').style.display = 'none';
-  const totalRows = APP.metadata.tradeIndex.length;
+  const totalTriggers = APP.metadata.tradeIndex.length;
   document.getElementById('status-text').textContent =
-    `Dataset loaded: ${APP.metadata.contracts.length} contracts · ${totalRows} triggers`;
+    `Dataset loaded: ${APP.metadata.contracts.length} contracts · ${totalTriggers} triggers`;
 }
 
 init();
