@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TFL-Collie — Rolling Playback Dashboard</title>
+
+  <!-- Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2330;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --danger:    #f85149;
+      --warn:      #d29922;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --radius:    10px;
+      --font:      'Inter', 'Segoe UI', system-ui, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ─── Layout ────────────────────────────────────────────────────────────── */
+    .app-wrapper {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 0 20px 40px;
+    }
+
+    /* ─── Header ────────────────────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 0 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #a371f7);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: #fff;
+    }
+    .logo-text h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo-text p  { font-size: 12px; color: var(--muted); }
+    .header-badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .header-badge span { color: var(--accent2); font-weight: 600; }
+
+    /* ─── Status bar ─────────────────────────────────────────────────────────── */
+    #status-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    #status-bar .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent2);
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    /* ─── Controls panel ─────────────────────────────────────────────────────── */
+    .controls-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .ctrl-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .ctrl-group select,
+    .ctrl-group input[type="range"] {
+      width: 100%;
+    }
+    select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 13px;
+      appearance: none;
+      cursor: pointer;
+      outline: none;
+      transition: border-color .15s;
+    }
+    select:focus { border-color: var(--accent); }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      cursor: pointer;
+      outline: none;
+      margin-top: 4px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .range-display {
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    /* ─── Buttons ────────────────────────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary   { background: var(--accent);  color: #0d1117; }
+    .btn-success   { background: var(--accent2); color: #0d1117; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger    { background: var(--danger);  color: #fff; }
+    .btn:disabled  { opacity: 0.4; cursor: not-allowed; }
+
+    /* ─── Main content area ──────────────────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 1100px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Chart card ─────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title .badge {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .card-body { padding: 0; }
+
+    #chart-container {
+      width: 100%;
+      height: 520px;
+    }
+
+    /* ─── Side panel ─────────────────────────────────────────────────────────── */
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ─── Info boxes ─────────────────────────────────────────────────────────── */
+    .info-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .info-box-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-box-header .indicator {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+    .agent-a .info-box-header .indicator { background: #3fb950; }
+    .agent-b .info-box-header .indicator { background: #58a6ff; }
+    .summary-box .info-box-header .indicator { background: #d29922; }
+
+    .info-box-body {
+      padding: 12px 14px;
+    }
+    .kv-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(48,54,61,0.5);
+      font-size: 12px;
+    }
+    .kv-row:last-child { border-bottom: none; }
+    .kv-key  { color: var(--muted); }
+    .kv-val  { color: var(--text); font-weight: 600; font-family: 'Courier New', monospace; }
+    .kv-val.long  { color: var(--accent2); }
+    .kv-val.short { color: var(--danger); }
+    .kv-val.hold  { color: var(--accent); }
+    .kv-val.exit  { color: var(--warn); }
+    .kv-val.pos   { color: var(--accent2); }
+    .kv-val.neg   { color: var(--danger); }
+
+    /* ─── Decision ledger ────────────────────────────────────────────────────── */
+    .ledger-section {
+      margin-bottom: 16px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    thead th {
+      background: var(--surface2);
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      padding: 8px 10px;
+      text-align: left;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    tbody tr {
+      border-bottom: 1px solid rgba(48,54,61,0.4);
+      transition: background .1s;
+    }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td {
+      padding: 6px 10px;
+      color: var(--text);
+    }
+    .action-hold { color: var(--accent);  font-weight: 700; }
+    .action-exit { color: var(--warn);    font-weight: 700; }
+    .pnl-pos     { color: var(--accent2); }
+    .pnl-neg     { color: var(--danger);  }
+
+    /* ─── State vector section ───────────────────────────────────────────────── */
+    .state-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 800px) {
+      .state-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ─── Progress bar ───────────────────────────────────────────────────────── */
+    .progress-wrap {
+      background: var(--surface2);
+      border-radius: 4px;
+      height: 6px;
+      margin: 8px 0 4px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #a371f7);
+      border-radius: 4px;
+      transition: width .3s ease;
+    }
+
+    /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ─── Loading overlay ────────────────────────────────────────────────────── */
+    #loading {
+      position: fixed; inset: 0;
+      background: rgba(13,17,23,0.92);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      gap: 16px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: var(--muted); font-size: 13px; }
+
+    /* ─── Tooltip-like reason text ───────────────────────────────────────────── */
+    .reason-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ─── Footer ─────────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 14px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Initialising TFL-Collie dashboard…</p>
+</div>
+
+<div class="app-wrapper">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">C</div>
+      <div class="logo-text">
+        <h1>TFL-Collie</h1>
+        <p>SAC Model · Natural Gas · Rolling Playback</p>
+      </div>
+    </div>
+    <div class="header-badge">
+      Agent B: <span id="model-label">Heuristic demo mode</span>
+    </div>
+  </header>
+
+  <!-- ── Status bar ─────────────────────────────────────────────────────── -->
+  <div id="status-bar">
+    <div class="dot"></div>
+    <span id="status-text">Select a contract and trigger to begin playback.</span>
+  </div>
+
+  <!-- ── Controls ───────────────────────────────────────────────────────── -->
+  <div class="controls-panel">
+    <div class="controls-grid">
+      <div class="ctrl-group">
+        <label>Contract</label>
+        <select id="contract-select"></select>
+      </div>
+      <div class="ctrl-group">
+        <label>Trigger</label>
+        <select id="trigger-select"></select>
+      </div>
+      <div class="ctrl-group">
+        <label>Playback step — <span id="step-label">1</span></label>
+        <input type="range" id="step-slider" min="0" max="0" value="0" />
+        <div class="progress-wrap">
+          <div class="progress-bar" id="step-progress" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <label>Speed (s/candle) — <span id="speed-label">1.0</span>s</label>
+        <input type="range" id="speed-slider" min="0.2" max="3.0" step="0.1" value="1.0" />
+      </div>
+      <div class="ctrl-group">
+        <label>Lookback bars — <span id="lookback-label">120</span></label>
+        <input type="range" id="lookback-slider" min="40" max="300" step="10" value="120" />
+      </div>
+      <div class="ctrl-group">
+        <label>Lookahead bars — <span id="lookahead-label">20</span></label>
+        <input type="range" id="lookahead-slider" min="0" max="80" step="5" value="20" />
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="render-btn">&#9654; Render step</button>
+      <button class="btn btn-primary"   id="play-one-btn">&#9654;&#9654; Play trigger</button>
+      <button class="btn btn-success"   id="play-all-btn">&#9654;&#9654;&#9654; Play all triggers</button>
+      <button class="btn btn-danger"    id="stop-btn" disabled>&#9646;&#9646; Stop</button>
+    </div>
+  </div>
+
+  <!-- ── Main grid ──────────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          Market Playback
+          <span class="badge" id="chart-badge">—</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);">
+          Candle <span id="candle-counter" style="color:var(--accent);font-weight:700;">—</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="chart-container"></div>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side-panel">
+
+      <!-- Agent A -->
+      <div class="info-box agent-a">
+        <div class="info-box-header">
+          <div class="indicator"></div>
+          Agent A — Entry Signal
+        </div>
+        <div class="info-box-body" id="agent-a-body">
+          <div class="kv-row"><span class="kv-key">Trigger</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Direction</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Entry time</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Entry price</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Blocked regime</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">fmt / pos / reg</span><span class="kv-val">—</span></div>
+        </div>
+      </div>
+
+      <!-- Agent B -->
+      <div class="info-box agent-b">
+        <div class="info-box-header">
+          <div class="indicator"></div>
+          Agent B — Exit Decision
+        </div>
+        <div class="info-box-body" id="agent-b-body">
+          <div class="kv-row"><span class="kv-key">Action</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bar</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Q(HOLD)</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Q(EXIT)</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Survival</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Bars-left</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Unrealized PnL</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val reason-text">—</span></div>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="info-box summary-box">
+        <div class="info-box-header">
+          <div class="indicator"></div>
+          Playback Summary
+        </div>
+        <div class="info-box-body" id="summary-body">
+          <div class="kv-row"><span class="kv-key">Contract</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Exit reason</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Realized PnL</span><span class="kv-val">—</span></div>
+          <div class="kv-row"><span class="kv-key">Model</span><span class="kv-val">—</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── State vector tables ─────────────────────────────────────────────── -->
+  <div class="state-grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Agent B Scalar State</div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="state-table">
+            <thead><tr><th>Feature</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">VAE Latent Vector z</div>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table id="z-table">
+            <thead><tr><th>Dim</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Decision ledger ────────────────────────────────────────────────── -->
+  <div class="ledger-section card">
+    <div class="card-header">
+      <div class="card-title">Decision Ledger</div>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table id="ledger-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Bar</th>
+              <th>Time</th>
+              <th>Action</th>
+              <th>Q(Hold)</th>
+              <th>Q(Exit)</th>
+              <th>Unrealized PnL (¢)</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <footer>
+    <span>TFL-Collie · SAC Model for Natural Gas · Rolling Playback Dashboard</span>
+    <span>
+      <a href="https://github.com/ebarros23/Collie" target="_blank">GitHub Repository</a>
+      &nbsp;·&nbsp; Built with Plotly.js
+    </span>
+  </footer>
+
+</div><!-- /.app-wrapper -->
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   TFL-Collie Dashboard — Pure client-side simulation
+   Mirrors all chart rules from tfl_collie_playback_full_contract_realistic.py
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// ── Constants (mirrored from Python) ────────────────────────────────────────
+const MAX_HOLD          = 28;
+const MIN_HOLD_BARS     = 5;
+const TRANSACTION_COST  = 0.05;
+const CENT              = 0.01;
+const MAX_REWARD_CLIP   = 10.0;
+const DEFAULT_LOOKBACK  = 120;
+const DEFAULT_LOOKAHEAD = 20;
+const REGIME_TOP_PCT    = 0.40;
+const REGIME_BOTTOM_PCT = 0.40;
+const REGIME_MIN_SAMPLES = 30;
+
+const SCALAR_NAMES = [
+  "position","trade_dir","bars_held_frac","bars_remaining_frac","unrealized_pnl",
+  "atr_pct","tod_sin","tod_cos","d24_atr","peak_unreal_norm","drawdown_norm",
+  "consec_adv_norm","d12_atr","unreal_peak_ratio","bar_rng_norm","forced_exit_eta",
+  "blocked_regime_flag"
+];
+
+// ── App state ────────────────────────────────────────────────────────────────
+let APP = {
+  df: null,           // full dataset rows
+  byContract: {},     // { contractName: [rows] }
+  contracts: [],
+  tradeIndex: [],     // [{contract, triggerBar, localIdx, entryDirection, time, regId, label}]
+  blockRegs: new Set(),
+  allowRegs: new Set(),
+  currentTrade: null,
+  currentContractDf: null,
+  stepIdx: 0,
+  isPlaying: false,
+  playTimer: null,
+  completedLabels: [],
+};
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function sign(v) { return v > 0 ? 1 : v < 0 ? -1 : 0; }
+function isFiniteNum(v) { return typeof v === 'number' && isFinite(v); }
+function fmt(v, d=4) { return isFiniteNum(v) ? v.toFixed(d) : '—'; }
+
+// ── CSV parser (robust, handles quoted fields) ────────────────────────────────
+function parseCSV(text) {
+  const lines = text.split('\n');
+  const headers = splitCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = splitCSVLine(line);
+    const row = {};
+    headers.forEach((h, idx) => { row[h.trim()] = vals[idx] !== undefined ? vals[idx].trim() : ''; });
+    rows.push(row);
+  }
+  return rows;
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+// ── Regime filter (mirrors compute_regime_filter) ────────────────────────────
+function computeRegimeFilter(byContract) {
+  const regRewards = {};
+  for (const [, grp] of Object.entries(byContract)) {
+    const sorted = [...grp].sort((a,b) => a.bar_idx - b.bar_idx);
+    const closes = sorted.map(r => r.close);
+    const regs   = sorted.map(r => r.reg_id);
+    const dirs   = sorted.map(r => r.entry_direction);
+    const mask   = sorted.map(r => r.confirmed_entry);
+    const n = sorted.length;
+    for (let t = 0; t < n; t++) {
+      if (!mask[t]) continue;
+      if (t + 1 + MAX_HOLD >= n) continue;
+      const direction = sign(dirs[t]);
+      const reg = regs[t];
+      if (direction === 0 || reg < 0) continue;
+      let pnl = ((closes[t + 1 + MAX_HOLD] - closes[t + 1]) * direction / CENT) - TRANSACTION_COST;
+      pnl = clamp(pnl, -MAX_REWARD_CLIP, MAX_REWARD_CLIP);
+      if (!regRewards[reg]) regRewards[reg] = [];
+      regRewards[reg].push(Math.max(pnl, 0));
+    }
+  }
+  const scores = [];
+  for (const [reg, vals] of Object.entries(regRewards)) {
+    if (vals.length < REGIME_MIN_SAMPLES) continue;
+    const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
+    scores.push({ reg: parseInt(reg), mean, n: vals.length });
+  }
+  if (!scores.length) return { allowRegs: new Set(), blockRegs: new Set() };
+  scores.sort((a,b) => b.mean - a.mean);
+  const topK = Math.max(1, Math.round(scores.length * REGIME_TOP_PCT));
+  const botK = Math.max(1, Math.round(scores.length * REGIME_BOTTOM_PCT));
+  return {
+    allowRegs: new Set(scores.slice(0, topK).map(s => s.reg)),
+    blockRegs: new Set(scores.slice(-botK).map(s => s.reg)),
+  };
+}
+
+// ── Build trade index (mirrors build_trade_index) ────────────────────────────
+function buildTradeIndex(byContract, blockRegs) {
+  const rows = [];
+  for (const [contract, grp] of Object.entries(byContract)) {
+    const sorted = [...grp].sort((a,b) => a.bar_idx - b.bar_idx);
+    for (let localIdx = 0; localIdx < sorted.length; localIdx++) {
+      const row = sorted[localIdx];
+      if (!row.confirmed_entry) continue;
+      if (localIdx + 1 >= sorted.length) continue;
+      const reg = row.reg_id;
+      const side = row.entry_direction > 0 ? 'LONG' : 'SHORT';
+      const label = `bar=${row.bar_idx} | ${row.time} | ${side} | reg=${reg}`;
+      rows.push({ contract, triggerBar: row.bar_idx, localIdx, entryDirection: row.entry_direction, time: row.time, regId: reg, label });
+    }
+  }
+  rows.sort((a,b) => a.contract.localeCompare(b.contract) || a.triggerBar - b.triggerBar);
+  return rows;
+}
+
+// ── Make state B scalars (mirrors make_state_B) ──────────────────────────────
+function makeStateB(contractDf, i, position, barsHeld, entryPx, tradeDir,
+                    maxUnrealized=0, consecAdv=0, forcedExitBar=null, blockRegs=new Set()) {
+  const row = contractDf[i];
+  const c = row.close;
+  let atr = row.atr;
+  if (!isFiniteNum(atr) || atr <= 1e-8) atr = Math.max(c * 0.005, 1e-6);
+  const ts = new Date(row.time);
+  const unreal = clamp((c - entryPx) * position / CENT, -MAX_REWARD_CLIP, MAX_REWARD_CLIP);
+  const peak = maxUnrealized;
+  const dd   = clamp((peak - unreal) / (atr / CENT + 1e-6), 0, 20);
+  const pkN  = clamp(peak / (atr / CENT + 1e-6), -20, 20);
+  const pr   = clamp(unreal / (Math.abs(peak) + 0.1), -2, 2);
+  const brngN = clamp((row.high - row.low) / (atr + 1e-6), 0, 4);
+  const forcedEta = forcedExitBar === null ? 0 : clamp((forcedExitBar - i) / Math.max(MAX_HOLD, 1), 0, 1);
+  const regId = isFiniteNum(row.reg_id) ? row.reg_id : -1;
+  const blockedFlag = (blockRegs.has(regId)) ? 1.0 : 0.0;
+  const hourFrac = ts.getUTCHours() + ts.getUTCMinutes() / 60;
+  const ema6  = isFiniteNum(row.ema6)  ? row.ema6  : c;
+  const sma12 = isFiniteNum(row.sma12) ? row.sma12 : c;
+  const sma24 = isFiniteNum(row.sma24) ? row.sma24 : c;
+  const sc = [
+    position,
+    tradeDir,
+    barsHeld / MAX_HOLD,
+    Math.max(MAX_HOLD - barsHeld, 0) / MAX_HOLD,
+    unreal,
+    atr / Math.max(c, 1e-6) * 100,
+    Math.sin(2 * Math.PI * hourFrac / 24),
+    Math.cos(2 * Math.PI * hourFrac / 24),
+    (ema6 - sma24) / (atr + 1e-6),
+    pkN,
+    dd,
+    Math.min(consecAdv, 8) / 8,
+    (ema6 - sma12) / (atr + 1e-6),
+    pr,
+    brngN,
+    forcedEta,
+    blockedFlag,
+  ].map(v => isFiniteNum(v) ? v : 0);
+  // latent z (zeros if not in dataset)
+  const z = Array.from({length:32}, (_,d) => {
+    const key = `z${String(d).padStart(2,'0')}`;
+    const val = row[key];
+    return isFiniteNum(val) ? val : 0;
+  });
+  const fmtId = isFiniteNum(row.fmt_id) ? row.fmt_id : -1;
+  const posId = isFiniteNum(row.pos_id) ? row.pos_id : -1;
+  return { z, fmtId, posId, regId, sc };
+}
+
+// ── Heuristic Agent B (mirrors heuristic_agent_b_action) ─────────────────────
+function heuristicAgentB(sc, barsHeld) {
+  const unreal = sc[4], d24 = Math.abs(sc[8]), dd = sc[10], consecAdv = sc[11];
+  const d12 = Math.abs(sc[12]), ratio = sc[13], eta = sc[15], blocked = sc[16];
+  let contScore = 0.60*d24 + 0.35*d12 + 0.15*ratio + 0.12*clamp(unreal/2, -2, 2)
+                - 0.65*dd - 0.30*consecAdv - 0.60*blocked - 0.40*(1 - eta);
+  if (barsHeld < MIN_HOLD_BARS) contScore += 0.25;
+  const qHold = contScore;
+  const qExit = -contScore + 0.10*dd + 0.10*(1 - eta);
+  const action = qHold >= qExit ? 0 : 1;
+  const survival = 1 / (1 + Math.exp(-contScore));
+  const barsLeft = clamp(eta * (0.65 + 0.35*survival), 0, 1);
+  return { action, qHold, qExit, survival, barsLeft };
+}
+
+// ── Explain decision (mirrors explain_decision) ───────────────────────────────
+function explainDecision(action, qHold, qExit, sc) {
+  const bits = [];
+  const dd=sc[10], d24=sc[8], d12=sc[12], eta=sc[15], blocked=sc[16], unreal=sc[4], consecAdv=sc[11];
+  if (action === 0) {
+    bits.push("HOLD is preferred");
+    if (Math.abs(d24) > 0.35) bits.push("trend still has structure");
+    if (Math.abs(d12) > 0.20) bits.push("fast spread supports continuation");
+    if (dd < 0.75) bits.push("drawdown is controlled");
+    if (eta > 0.30) bits.push("deadline is not close");
+    if (unreal > 0) bits.push("trade is positive");
+  } else {
+    bits.push("EXIT is preferred");
+    if (dd >= 0.75) bits.push("drawdown has grown");
+    if (eta <= 0.30) bits.push("deadline is close");
+    if (blocked >= 0.5) bits.push("regime is blocked");
+    if (consecAdv >= 0.50) bits.push("adverse bars are accumulating");
+    if (qExit > qHold) bits.push("continuation value weakened");
+  }
+  return bits.join("; ") + ".";
+}
+
+// ── Find forced exit bar ──────────────────────────────────────────────────────
+function findForcedExitBar(contractDf, entryBar, entryDirection) {
+  const endCap = Math.min(contractDf.length - 1, entryBar + MAX_HOLD);
+  for (let i = entryBar; i <= endCap; i++) {
+    const fs = contractDf[i].fast_signal;
+    if (isFiniteNum(fs) && fs === -entryDirection) return i;
+  }
+  return endCap;
+}
+
+// ── Simulate trade (mirrors simulate_trade) ───────────────────────────────────
+function simulateTrade(contractDf, trigLocalIdx, blockRegs) {
+  const sorted = [...contractDf].sort((a,b) => a.bar_idx - b.bar_idx);
+  const trig = trigLocalIdx;
+  const trigRow = sorted[trig];
+  const entryDirection = sign(trigRow.entry_direction);
+  const regId = isFiniteNum(trigRow.reg_id) ? trigRow.reg_id : -1;
+  const blockedRegime = regId >= 0 && blockRegs.has(regId);
+  if (trig + 1 >= sorted.length) throw new Error("Trigger bar too close to end.");
+  const entryBar = trig + 1;
+  const entryRow = sorted[entryBar];
+  const entryPrice = entryRow.close;
+  const entryTime  = entryRow.time;
+  const forcedExitBar = findForcedExitBar(sorted, entryBar, entryDirection);
+  const decisions = [];
+  const position = entryDirection > 0 ? 1 : -1;
+  let barsHeld = 0, maxUnrealized = 0, consecAdv = 0, prevClose = entryPrice;
+  let exitBar = forcedExitBar, exitReason = "Forced exit", exitPrice = sorted[exitBar].close;
+  for (let i = entryBar; i <= Math.min(forcedExitBar, sorted.length - 1); i++) {
+    const row = sorted[i];
+    const c = row.close;
+    const unreal = (c - entryPrice) * position / CENT;
+    maxUnrealized = Math.max(maxUnrealized, unreal);
+    if (i > entryBar) {
+      const barMtm = (c - prevClose) * position / CENT;
+      consecAdv = barMtm < 0 ? consecAdv + 1 : 0;
+    }
+    prevClose = c;
+    const { z, fmtId, posId, regId: regIdI, sc } = makeStateB(
+      sorted, i, position, barsHeld, entryPrice, position,
+      maxUnrealized, consecAdv, forcedExitBar, blockRegs
+    );
+    let { action, qHold, qExit, survival, barsLeft } = heuristicAgentB(sc, barsHeld);
+    if (barsHeld < MIN_HOLD_BARS) action = 0;
+    if (i >= forcedExitBar) { action = 1; exitReason = "Forced exit: opposite fast signal or max-hold cap"; }
+    const reason = explainDecision(action, qHold, qExit, sc);
+    decisions.push({ barIdx: i, timestamp: row.time, action: action === 0 ? "HOLD" : "EXIT",
+      qHold, qExit, survival, barsLeftScore: barsLeft,
+      unrealizedPnlCents: unreal, barsHeld, reason, sc, z });
+    if (action === 1) {
+      exitBar = i; exitPrice = c;
+      if (i < forcedExitBar) exitReason = "Agent B voluntary exit";
+      break;
+    }
+    barsHeld++;
+  }
+  const realizedPnl = (exitPrice - entryPrice) * position / CENT - TRANSACTION_COST;
+  return {
+    contract: String(trigRow.contract),
+    triggerBar: trigRow.bar_idx,
+    entryBar, entryTime, entryDirection, entryPrice,
+    exitBar, exitTime: sorted[exitBar].time, exitPrice,
+    realizedPnlCents: realizedPnl, exitReason, decisions,
+    blockedRegime,
+    fmtId: isFiniteNum(trigRow.fmt_id) ? trigRow.fmt_id : -1,
+    posId: isFiniteNum(trigRow.pos_id) ? trigRow.pos_id : -1,
+    regId,
+    triggerLabel: `bar=${trigRow.bar_idx} | ${trigRow.time} | ${entryDirection > 0 ? 'LONG' : 'SHORT'} | reg=${regId}`,
+    sortedDf: sorted,
+  };
+}
+
+// ── Window bounds (mirrors window_bounds) ─────────────────────────────────────
+function windowBounds(nRows, currentBarIdx, lookback, lookahead) {
+  const start = Math.max(0, currentBarIdx - Math.max(lookback, 1));
+  const end   = Math.min(nRows - 1, currentBarIdx + Math.max(lookahead, 0));
+  return { start, end };
+}
+
+// ── Progressive series (mirrors progressive_series) ──────────────────────────
+function progressiveSeries(df, key, visEnd, startIdx) {
+  const out = [];
+  for (let idx = startIdx; idx < df.length; idx++) {
+    const val = df[idx][key];
+    if (idx <= visEnd && isFiniteNum(val)) out.push(val);
+    else out.push(null);
+  }
+  return out;
+}
+
+// ── Build Plotly figure (mirrors make_rolling_figure) ────────────────────────
+function buildFigure(trade, stepIdx, historicalTrades=[]) {
+  const contractDf = trade.sortedDf;
+  const dec = trade.decisions[stepIdx];
+  const currentBarIdx = dec.barIdx;
+  const lookback  = parseInt(document.getElementById('lookback-slider').value);
+  const lookahead = parseInt(document.getElementById('lookahead-slider').value);
+  const { start: startIdx, end: endIdx } = windowBounds(contractDf.length, currentBarIdx, lookback, lookahead);
+  const windowDf  = contractDf.slice(startIdx, endIdx + 1);
+  const visibleDf = contractDf.slice(startIdx, currentBarIdx + 1);
+  const shownDecisions = trade.decisions.slice(0, stepIdx + 1);
+  const traces = [];
+
+  // ── Candlestick (only visible bars) ──────────────────────────────────────
+  traces.push({
+    type: 'candlestick',
+    x:     visibleDf.map(r => r.time),
+    open:  visibleDf.map(r => r.open),
+    high:  visibleDf.map(r => r.high),
+    low:   visibleDf.map(r => r.low),
+    close: visibleDf.map(r => r.close),
+    name: 'Price',
+    increasing: { line: { color: '#3fb950', width: 1 } },
+    decreasing: { line: { color: '#f85149', width: 1 } },
+    whiskerwidth: 0.3,
+  });
+
+  // ── Moving averages (progressive reveal — same rule as Python) ────────────
+  const wTimes = windowDf.map(r => r.time);
+  traces.push({
+    type: 'scatter', mode: 'lines',
+    x: wTimes,
+    y: progressiveSeries(contractDf, 'ema6', currentBarIdx, startIdx),
+    name: 'EMA6',
+    line: { color: '#58a6ff', width: 1.5 },
+    connectgaps: false,
+  });
+  traces.push({
+    type: 'scatter', mode: 'lines',
+    x: wTimes,
+    y: progressiveSeries(contractDf, 'sma12', currentBarIdx, startIdx),
+    name: 'SMA12',
+    line: { color: '#d29922', width: 1.5 },
+    connectgaps: false,
+  });
+  traces.push({
+    type: 'scatter', mode: 'lines',
+    x: wTimes,
+    y: progressiveSeries(contractDf, 'sma24', currentBarIdx, startIdx),
+    name: 'SMA24',
+    line: { color: '#a371f7', width: 1.5 },
+    connectgaps: false,
+  });
+
+  // ── Agent A entry marker ──────────────────────────────────────────────────
+  if (startIdx <= trade.entryBar && trade.entryBar <= currentBarIdx) {
+    const entryRow = contractDf[trade.entryBar];
+    traces.push({
+      type: 'scatter', mode: 'markers+text',
+      x: [entryRow.time], y: [trade.entryPrice],
+      name: 'Agent A',
+      text: ['A'],
+      textposition: 'top center',
+      textfont: { color: '#3fb950', size: 11, family: 'monospace' },
+      marker: {
+        symbol: trade.entryDirection > 0 ? 'triangle-up' : 'triangle-down',
+        size: 14, color: '#3fb950',
+        line: { color: '#fff', width: 1 },
+      },
+    });
+  }
+
+  // ── Historical trade markers ──────────────────────────────────────────────
+  const pastAx=[], pastAy=[], pastBx=[], pastBy=[], pastBtext=[];
+  for (const pt of historicalTrades) {
+    if (startIdx <= pt.entryBar && pt.entryBar <= endIdx) {
+      pastAx.push(contractDf[pt.entryBar].time);
+      pastAy.push(pt.entryPrice);
+    }
+    for (const d of pt.decisions) {
+      if (startIdx <= d.barIdx && d.barIdx <= endIdx) {
+        pastBx.push(contractDf[d.barIdx].time);
+        pastBy.push(contractDf[d.barIdx].close);
+        pastBtext.push(d.action === 'EXIT' ? 'B EXIT' : 'B HOLD');
+      }
+    }
+  }
+  if (pastAx.length) {
+    traces.push({
+      type: 'scatter', mode: 'markers+text',
+      x: pastAx, y: pastAy, name: 'Past Agent A',
+      text: pastAx.map(() => 'A'),
+      textposition: 'top center',
+      textfont: { color: '#8b949e', size: 10 },
+      marker: { symbol: 'diamond', size: 10, color: '#8b949e' },
+    });
+  }
+  if (pastBx.length) {
+    traces.push({
+      type: 'scatter', mode: 'markers+text',
+      x: pastBx, y: pastBy, name: 'Past Agent B',
+      text: pastBtext,
+      textposition: 'bottom center',
+      textfont: { color: '#8b949e', size: 9 },
+      marker: { symbol: 'x', size: 7, color: '#8b949e' },
+    });
+  }
+
+  // ── Agent B decision markers (shown decisions only) ───────────────────────
+  const bx=[], by=[], btext=[], bcolors=[];
+  for (const d of shownDecisions) {
+    if (startIdx <= d.barIdx && d.barIdx <= currentBarIdx) {
+      bx.push(contractDf[d.barIdx].time);
+      by.push(contractDf[d.barIdx].close);
+      btext.push(d.action === 'EXIT' ? 'B EXIT' : 'B HOLD');
+      bcolors.push(d.action === 'EXIT' ? '#d29922' : '#58a6ff');
+    }
+  }
+  if (bx.length) {
+    traces.push({
+      type: 'scatter', mode: 'markers+text',
+      x: bx, y: by, name: 'Agent B decisions',
+      text: btext,
+      textposition: 'bottom center',
+      textfont: { size: 9 },
+      marker: { symbol: 'circle', size: 9, color: bcolors, line: { color: '#fff', width: 0.5 } },
+    });
+  }
+
+  // ── Layout ────────────────────────────────────────────────────────────────
+  const entryTs  = contractDf[trade.entryBar].time;
+  const exitTs   = contractDf[trade.exitBar].time;
+  const currentTs = contractDf[currentBarIdx].time;
+  const shapes = [
+    { type:'line', x0:currentTs, x1:currentTs, y0:0, y1:1, yref:'paper',
+      line:{ color:'#e6edf3', width:1, dash:'dash' } },
+  ];
+  if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
+    shapes.push({ type:'line', x0:entryTs, x1:entryTs, y0:0, y1:1, yref:'paper',
+      line:{ color:'#3fb950', width:1, dash:'dot' } });
+  }
+  if (startIdx <= trade.exitBar && trade.exitBar <= endIdx) {
+    shapes.push({ type:'line', x0:exitTs, x1:exitTs, y0:0, y1:1, yref:'paper',
+      line:{ color:'#f85149', width:1, dash:'dot' } });
+  }
+  const annotations = [
+    { x:currentTs, y:1, yref:'paper', text:'Now', showarrow:false, yshift:14,
+      font:{ color:'#e6edf3', size:11 }, bgcolor:'rgba(0,0,0,0)' },
+  ];
+  if (startIdx <= trade.entryBar && trade.entryBar <= endIdx) {
+    annotations.push({ x:entryTs, y:1, yref:'paper', text:'Entry', showarrow:false, yshift:14,
+      font:{ color:'#3fb950', size:11 }, bgcolor:'rgba(0,0,0,0)' });
+  }
+  if (startIdx <= trade.exitBar && trade.exitBar <= endIdx) {
+    annotations.push({ x:exitTs, y:1, yref:'paper', text:'Exit zone', showarrow:false, yshift:14,
+      font:{ color:'#f85149', size:11 }, bgcolor:'rgba(0,0,0,0)' });
+  }
+
+  const layout = {
+    paper_bgcolor: '#161b22',
+    plot_bgcolor:  '#0d1117',
+    font: { color: '#e6edf3', family: 'Inter, Segoe UI, sans-serif', size: 12 },
+    title: { text: `${trade.contract} — rolling market playback`, font: { size: 14 }, x: 0.01 },
+    xaxis: {
+      title: '', color: '#8b949e',
+      gridcolor: '#21262d', zerolinecolor: '#30363d',
+      rangeslider: { visible: false },
+      range: [windowDf[0].time, windowDf[windowDf.length-1].time],
+    },
+    yaxis: {
+      title: 'Price', color: '#8b949e',
+      gridcolor: '#21262d', zerolinecolor: '#30363d',
+    },
+    height: 500,
+    margin: { t: 50, b: 40, l: 60, r: 20 },
+    legend: { orientation: 'h', y: 1.06, x: 0, font: { size: 11 }, bgcolor: 'rgba(0,0,0,0)' },
+    shapes,
+    annotations,
+    uirevision: 'rolling-playback',
+  };
+
+  return { traces, layout };
+}
+
+// ── Render step ───────────────────────────────────────────────────────────────
+function renderStep(stepIdx, historicalTrades=[]) {
+  const trade = APP.currentTrade;
+  if (!trade) return;
+  const nSteps = trade.decisions.length;
+  stepIdx = clamp(stepIdx, 0, Math.max(nSteps - 1, 0));
+  APP.stepIdx = stepIdx;
+  const dec = trade.decisions[stepIdx];
+
+  // Update slider
+  const slider = document.getElementById('step-slider');
+  slider.max = Math.max(nSteps - 1, 0);
+  slider.value = stepIdx;
+  document.getElementById('step-label').textContent = stepIdx + 1;
+  const pct = nSteps > 1 ? (stepIdx / (nSteps - 1) * 100) : 0;
+  document.getElementById('step-progress').style.width = pct + '%';
+  document.getElementById('candle-counter').textContent = `${stepIdx+1} / ${nSteps}`;
+
+  // Chart
+  const { traces, layout } = buildFigure(trade, stepIdx, historicalTrades);
+  Plotly.react('chart-container', traces, layout, { responsive: true, displayModeBar: true, displaylogo: false });
+
+  // Chart badge
+  document.getElementById('chart-badge').textContent = trade.contract;
+
+  // Agent A panel
+  const dirClass = trade.entryDirection > 0 ? 'long' : 'short';
+  const dirText  = trade.entryDirection > 0 ? 'LONG' : 'SHORT';
+  document.getElementById('agent-a-body').innerHTML = kvRow('Trigger', trade.triggerLabel)
+    + kvRow('Direction', `<span class="kv-val ${dirClass}">${dirText}</span>`, true)
+    + kvRow('Entry time', trade.entryTime)
+    + kvRow('Entry price', fmt(trade.entryPrice, 5))
+    + kvRow('Blocked regime', String(trade.blockedRegime))
+    + kvRow('fmt / pos / reg', `${trade.fmtId} / ${trade.posId} / ${trade.regId}`);
+
+  // Agent B panel
+  const actionClass = dec.action === 'HOLD' ? 'hold' : 'exit';
+  const pnlClass    = dec.unrealizedPnlCents >= 0 ? 'pos' : 'neg';
+  document.getElementById('agent-b-body').innerHTML =
+    kvRow('Action', `<span class="kv-val ${actionClass}">${dec.action}</span>`, true)
+    + kvRow('Bar', dec.barIdx)
+    + kvRow('Time', dec.timestamp)
+    + kvRow('Q(HOLD)', fmt(dec.qHold))
+    + kvRow('Q(EXIT)', fmt(dec.qExit))
+    + kvRow('Survival', fmt(dec.survival, 3))
+    + kvRow('Bars-left', fmt(dec.barsLeftScore, 3))
+    + kvRow('Unrealized PnL', `<span class="kv-val ${pnlClass}">${fmt(dec.unrealizedPnlCents, 3)} ¢</span>`, true)
+    + `<div class="kv-row"><span class="kv-key">Reason</span><span class="kv-val reason-text" title="${dec.reason}">${dec.reason}</span></div>`;
+
+  // Summary panel
+  const realClass = trade.realizedPnlCents >= 0 ? 'pos' : 'neg';
+  document.getElementById('summary-body').innerHTML =
+    kvRow('Contract', trade.contract)
+    + kvRow('Exit reason', trade.exitReason)
+    + kvRow('Realized PnL', `<span class="kv-val ${realClass}">${fmt(trade.realizedPnlCents, 3)} ¢</span>`, true)
+    + kvRow('Model', 'Heuristic demo mode');
+
+  // Status
+  document.getElementById('status-text').textContent =
+    `${trade.triggerLabel} — candle ${stepIdx+1}/${nSteps}. Window rolls forward without compressing candles.`;
+
+  // Scalar state table
+  renderTable('state-table', ['Feature','Value'],
+    dec.sc.map((v,i) => [SCALAR_NAMES[i] || `sc${i}`, fmt(v,6)]));
+
+  // Z table
+  renderTable('z-table', ['Dim','Value'],
+    dec.z.map((v,d) => [`z${String(d).padStart(2,'0')}`, fmt(v,6)]));
+
+  // Ledger
+  const shownDecs = trade.decisions.slice(0, stepIdx + 1);
+  renderLedger(shownDecs);
+}
+
+function kvRow(key, val, raw=false) {
+  const valHtml = raw ? val : `<span class="kv-val">${val}</span>`;
+  return `<div class="kv-row"><span class="kv-key">${key}</span>${valHtml}</div>`;
+}
+
+function renderTable(id, headers, rows) {
+  const tbody = document.querySelector(`#${id} tbody`);
+  tbody.innerHTML = rows.map(r =>
+    `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+function renderLedger(decisions) {
+  const tbody = document.querySelector('#ledger-table tbody');
+  tbody.innerHTML = decisions.map((d, ix) => {
+    const ac = d.action === 'HOLD' ? 'action-hold' : 'action-exit';
+    const pc = d.unrealizedPnlCents >= 0 ? 'pnl-pos' : 'pnl-neg';
+    return `<tr>
+      <td>${ix+1}</td>
+      <td>${d.barIdx}</td>
+      <td>${d.timestamp}</td>
+      <td class="${ac}">${d.action}</td>
+      <td>${fmt(d.qHold)}</td>
+      <td>${fmt(d.qExit)}</td>
+      <td class="${pc}">${fmt(d.unrealizedPnlCents,3)}</td>
+      <td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.reason}">${d.reason}</td>
+    </tr>`;
+  }).join('');
+  // Auto-scroll ledger to bottom
+  const wrap = tbody.closest('.table-wrap');
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+// ── Populate contract dropdown ────────────────────────────────────────────────
+function populateContracts() {
+  const sel = document.getElementById('contract-select');
+  sel.innerHTML = APP.contracts.map(c => `<option value="${c}">${c}</option>`).join('');
+  sel.addEventListener('change', () => {
+    populateTriggers(sel.value);
+    loadTrigger();
+  });
+}
+
+function populateTriggers(contract) {
+  const sel = document.getElementById('trigger-select');
+  const choices = APP.tradeIndex.filter(t => t.contract === contract);
+  sel.innerHTML = choices.length
+    ? choices.map(t => `<option value="${t.label}">${t.label}</option>`).join('')
+    : '<option>No trades found</option>';
+  sel.removeEventListener('change', loadTrigger);
+  sel.addEventListener('change', loadTrigger);
+}
+
+function loadTrigger() {
+  const contract = document.getElementById('contract-select').value;
+  const label    = document.getElementById('trigger-select').value;
+  const contractDf = APP.byContract[contract];
+  if (!contractDf) return;
+  const entry = APP.tradeIndex.find(t => t.contract === contract && t.label === label);
+  if (!entry) return;
+  try {
+    APP.currentTrade = simulateTrade(contractDf, entry.localIdx, APP.blockRegs);
+    APP.currentContractDf = contractDf;
+    APP.stepIdx = 0;
+    APP.completedLabels = [];
+    renderStep(0);
+  } catch(e) {
+    document.getElementById('status-text').textContent = 'Error: ' + e.message;
+  }
+}
+
+// ── Playback controls ─────────────────────────────────────────────────────────
+function stopPlayback() {
+  APP.isPlaying = false;
+  if (APP.playTimer) { clearTimeout(APP.playTimer); APP.playTimer = null; }
+  document.getElementById('stop-btn').disabled = true;
+  document.getElementById('play-one-btn').disabled = false;
+  document.getElementById('play-all-btn').disabled = false;
+}
+
+function startPlayOne() {
+  if (!APP.currentTrade) return;
+  stopPlayback();
+  APP.isPlaying = true;
+  document.getElementById('stop-btn').disabled = false;
+  document.getElementById('play-one-btn').disabled = true;
+  document.getElementById('play-all-btn').disabled = true;
+  const nSteps = APP.currentTrade.decisions.length;
+  const speed  = parseFloat(document.getElementById('speed-slider').value) * 1000;
+  let step = APP.stepIdx;
+  function tick() {
+    if (!APP.isPlaying || step >= nSteps) { stopPlayback(); return; }
+    renderStep(step);
+    step++;
+    APP.playTimer = setTimeout(tick, speed);
+  }
+  tick();
+}
+
+function startPlayAll() {
+  const contract = document.getElementById('contract-select').value;
+  const choices  = APP.tradeIndex.filter(t => t.contract === contract);
+  if (!choices.length) return;
+  stopPlayback();
+  APP.isPlaying = true;
+  document.getElementById('stop-btn').disabled = false;
+  document.getElementById('play-one-btn').disabled = true;
+  document.getElementById('play-all-btn').disabled = true;
+  APP.completedLabels = [];
+  const speed = parseFloat(document.getElementById('speed-slider').value) * 1000;
+  let ci = 0, step = 0;
+  function nextTrade() {
+    if (!APP.isPlaying || ci >= choices.length) { stopPlayback(); return; }
+    const entry = choices[ci];
+    document.getElementById('trigger-select').value = entry.label;
+    try {
+      APP.currentTrade = simulateTrade(APP.byContract[contract], entry.localIdx, APP.blockRegs);
+    } catch(e) { ci++; nextTrade(); return; }
+    step = 0;
+    tick();
+  }
+  function tick() {
+    if (!APP.isPlaying) return;
+    const nSteps = APP.currentTrade.decisions.length;
+    if (step >= nSteps) {
+      APP.completedLabels.push(choices[ci].label);
+      ci++;
+      nextTrade();
+      return;
+    }
+    const histTrades = APP.completedLabels.map(lbl => {
+      const e = APP.tradeIndex.find(t => t.contract === contract && t.label === lbl);
+      if (!e) return null;
+      try { return simulateTrade(APP.byContract[contract], e.localIdx, APP.blockRegs); } catch { return null; }
+    }).filter(Boolean);
+    renderStep(step, histTrades);
+    step++;
+    APP.playTimer = setTimeout(tick, speed);
+  }
+  nextTrade();
+}
+
+// ── Range slider live labels ──────────────────────────────────────────────────
+function bindSlider(id, labelId, suffix='') {
+  const el = document.getElementById(id);
+  const lb = document.getElementById(labelId);
+  el.addEventListener('input', () => { lb.textContent = el.value + suffix; });
+}
+
+// ── Data loading ──────────────────────────────────────────────────────────────
+async function loadData() {
+  // Try to load the parquet/csv dataset from the repo
+  // Since this is a static page, we load a pre-generated JSON dataset
+  // The dataset is embedded as a JSON file generated from the parquet
+  try {
+    const resp = await fetch('tfl_ng_dataset.json');
+    if (!resp.ok) throw new Error('Dataset not found');
+    const data = await resp.json();
+    return data;
+  } catch {
+    // Fallback: generate synthetic demo data
+    return generateDemoData();
+  }
+}
+
+function generateDemoData() {
+  // Generate realistic synthetic natural gas price data for demo
+  const contracts = ['NGF25', 'NGG25', 'NGH25', 'NGJ25'];
+  const rows = [];
+  for (const contract of contracts) {
+    let price = 2.5 + Math.random() * 0.5;
+    let time = new Date('2024-01-02T09:00:00Z');
+    const nBars = 300;
+    let ema6 = price, sma12 = price, sma24 = price;
+    const prices6=[], prices12=[], prices24=[];
+    for (let i = 0; i < nBars; i++) {
+      const atr = 0.015 + Math.random() * 0.01;
+      const open = price;
+      const change = (Math.random() - 0.49) * atr * 2;
+      price = Math.max(1.5, price + change);
+      const high  = Math.max(open, price) + Math.random() * atr * 0.5;
+      const low   = Math.min(open, price) - Math.random() * atr * 0.5;
+      prices6.push(price); prices12.push(price); prices24.push(price);
+      if (prices6.length > 6)  prices6.shift();
+      if (prices12.length > 12) prices12.shift();
+      if (prices24.length > 24) prices24.shift();
+      ema6  = prices6.reduce((a,b)=>a+b,0)/prices6.length;
+      sma12 = prices12.reduce((a,b)=>a+b,0)/prices12.length;
+      sma24 = prices24.reduce((a,b)=>a+b,0)/prices24.length;
+      const trend = ema6 > sma24 ? 1 : -1;
+      const confirmed = i > 24 && Math.random() < 0.07;
+      const fastSignal = Math.random() < 0.1 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+      // latent z dims
+      const zDims = {};
+      for (let d = 0; d < 32; d++) {
+        zDims[`z${String(d).padStart(2,'0')}`] = (Math.random() - 0.5) * 2;
+      }
+      rows.push({
+        contract, bar_idx: i,
+        time: time.toISOString().replace('T',' ').replace('.000Z',''),
+        open, high, low, close: price,
+        atr, ema6, sma12, sma24,
+        confirmed_entry: confirmed,
+        entry_direction: confirmed ? trend : 0,
+        fast_signal: fastSignal,
+        fmt_id: Math.floor(Math.random() * 400),
+        pos_id: Math.floor(Math.random() * 256),
+        reg_id: Math.floor(Math.random() * 144),
+        ...zDims,
+      });
+      time = new Date(time.getTime() + 60 * 60 * 1000); // +1 hour
+    }
+  }
+  return rows;
+}
+
+function processRows(rawRows) {
+  return rawRows.map(r => ({
+    ...r,
+    bar_idx:         parseInt(r.bar_idx)   || 0,
+    open:            parseFloat(r.open)    || 0,
+    high:            parseFloat(r.high)    || 0,
+    low:             parseFloat(r.low)     || 0,
+    close:           parseFloat(r.close)   || 0,
+    atr:             parseFloat(r.atr)     || 0,
+    ema6:            parseFloat(r.ema6)    || null,
+    sma12:           parseFloat(r.sma12)   || null,
+    sma24:           parseFloat(r.sma24)   || null,
+    confirmed_entry: r.confirmed_entry === true || r.confirmed_entry === 'True' || r.confirmed_entry === '1' || r.confirmed_entry === 1,
+    entry_direction: parseFloat(r.entry_direction) || 0,
+    fast_signal:     parseFloat(r.fast_signal)     || 0,
+    fmt_id:          parseInt(r.fmt_id)    ?? -1,
+    pos_id:          parseInt(r.pos_id)    ?? -1,
+    reg_id:          parseInt(r.reg_id)    ?? -1,
+    ...Object.fromEntries(
+      Array.from({length:32},(_,d)=>{
+        const k=`z${String(d).padStart(2,'0')}`;
+        return [k, parseFloat(r[k]) || 0];
+      })
+    ),
+  }));
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+async function init() {
+  // Bind range sliders
+  bindSlider('speed-slider',    'speed-label',    's');
+  bindSlider('lookback-slider', 'lookback-label', '');
+  bindSlider('lookahead-slider','lookahead-label','');
+  document.getElementById('step-slider').addEventListener('input', e => {
+    document.getElementById('step-label').textContent = parseInt(e.target.value) + 1;
+    renderStep(parseInt(e.target.value));
+  });
+
+  // Buttons
+  document.getElementById('render-btn').addEventListener('click', () => {
+    renderStep(parseInt(document.getElementById('step-slider').value));
+  });
+  document.getElementById('play-one-btn').addEventListener('click', startPlayOne);
+  document.getElementById('play-all-btn').addEventListener('click', startPlayAll);
+  document.getElementById('stop-btn').addEventListener('click', stopPlayback);
+
+  // Load data
+  document.getElementById('status-text').textContent = 'Loading dataset…';
+  let rawRows;
+  try {
+    rawRows = await loadData();
+  } catch(e) {
+    document.getElementById('status-text').textContent = 'Failed to load dataset: ' + e.message;
+    document.getElementById('loading').style.display = 'none';
+    return;
+  }
+
+  const rows = processRows(rawRows);
+  APP.df = rows;
+
+  // Group by contract
+  for (const row of rows) {
+    if (!APP.byContract[row.contract]) APP.byContract[row.contract] = [];
+    APP.byContract[row.contract].push(row);
+  }
+  // Sort each contract by bar_idx
+  for (const k of Object.keys(APP.byContract)) {
+    APP.byContract[k].sort((a,b) => a.bar_idx - b.bar_idx);
+  }
+  APP.contracts = Object.keys(APP.byContract).sort();
+
+  // Regime filter
+  const { allowRegs, blockRegs } = computeRegimeFilter(APP.byContract);
+  APP.allowRegs = allowRegs;
+  APP.blockRegs = blockRegs;
+
+  // Trade index
+  APP.tradeIndex = buildTradeIndex(APP.byContract, APP.blockRegs);
+
+  // Populate UI
+  populateContracts();
+  if (APP.contracts.length) {
+    populateTriggers(APP.contracts[0]);
+    loadTrigger();
+  }
+
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('status-text').textContent =
+    `Dataset loaded: ${rows.length.toLocaleString()} bars · ${APP.contracts.length} contracts · ${APP.tradeIndex.length} triggers`;
+}
+
+init();
+</script>
+</body>
+</html>
